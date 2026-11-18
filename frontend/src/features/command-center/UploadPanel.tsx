@@ -2,7 +2,7 @@ import { useId, useRef, useState } from "react";
 import { Upload } from "lucide-react";
 import { ApiError, api } from "@/api/client";
 import type { UploadResponse } from "@/api/types";
-import { Panel } from "@/components/ui/Panel";
+import { Brackets } from "@/components/ui/Brackets";
 
 /** Matches the backend's documented 10 MB limit. */
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
@@ -17,6 +17,7 @@ export function validateFile(file: File): string | null {
 
 type Phase = { kind: "idle" } | { kind: "uploading"; name: string } | { kind: "error"; message: string; requestId: string | null };
 
+/** The ingestion instrument: a slim drop surface that reacts to drag, and reports every outcome. */
 export function UploadPanel({ onUploaded }: { onUploaded: (r: UploadResponse) => void }) {
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [dragging, setDragging] = useState(false);
@@ -46,7 +47,7 @@ export function UploadPanel({ onUploaded }: { onUploaded: (r: UploadResponse) =>
   const busy = phase.kind === "uploading";
 
   return (
-    <Panel title="Log upload" meta="CSV · JSON · max 10 MB">
+    <section aria-label="Log ingestion">
       <div
         onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
         onDragLeave={() => setDragging(false)}
@@ -56,11 +57,20 @@ export function UploadPanel({ onUploaded }: { onUploaded: (r: UploadResponse) =>
           const f = e.dataTransfer.files[0];
           if (f && !busy) void submit(f);
         }}
-        className={`flex items-center justify-between gap-4 border border-dashed px-4 py-5 ${dragging ? "border-verified bg-surface-2" : "border-line-strong"}`}
+        className={`brk relative flex flex-wrap items-center justify-between gap-5 px-6 py-5 transition-all duration-500 ${dragging ? "mat-lit" : "mat-plane"}`}
+        style={dragging ? { boxShadow: "0 0 0 1px rgba(99,235,216,0.6), 0 0 60px -10px rgba(99,235,216,0.35)" } : undefined}
       >
-        <div className="text-[13px] text-ink-muted">
-          Drop an authentication or web-server log here, or choose a file.
-          <p className="mt-0.5 text-xs text-ink-faint">Malformed rows are quarantined and reported, not discarded silently.</p>
+        <Brackets />
+        <div className="flex min-w-0 items-center gap-5">
+          <span className={`grid h-11 w-11 shrink-0 place-items-center border ${dragging ? "border-verified text-verified" : "border-line-strong text-ink-muted"}`}>
+            <Upload size={18} strokeWidth={1.5} aria-hidden className={busy ? "animate-pulse" : ""} />
+          </span>
+          <div className="min-w-0">
+            <div className="t-micro text-ink">{dragging ? "Release to analyse" : busy ? "Analysing" : "Ingest a log"}</div>
+            <p className="mt-1.5 text-[13.5px] text-ink-muted">
+              Drop an authentication or web-server log here, or choose a file. <span className="text-ink-faint">CSV · JSON · max 10 MB · malformed rows are quarantined and reported, not discarded silently.</span>
+            </p>
+          </div>
         </div>
         <div>
           <input
@@ -78,17 +88,17 @@ export function UploadPanel({ onUploaded }: { onUploaded: (r: UploadResponse) =>
           />
           <label
             htmlFor={inputId}
-            className={`inline-flex cursor-pointer items-center gap-2 border border-line-strong bg-surface-2 px-3 py-2 text-[13px] hover:bg-surface-3 ${busy ? "pointer-events-none opacity-50" : ""}`}
+            className={`inline-flex cursor-pointer items-center gap-2 border border-verified/50 bg-transparent px-5 py-3 text-[11.5px] uppercase tracking-[0.18em] text-verified transition-colors hover:bg-verified/10 focus-within:bg-verified/10 ${busy ? "pointer-events-none opacity-50" : ""}`}
           >
-            <Upload size={14} aria-hidden /> Choose file
+            Choose file
           </label>
         </div>
       </div>
 
-      <div aria-live="polite" className="mt-3 min-h-5 text-[13px]">
+      <div aria-live="polite" className="min-h-5 px-1 pt-3 text-[13px]">
         {phase.kind === "uploading" && (
           <p className="text-ink-muted">
-            Uploading and analysing <span className="font-mono">{phase.name}</span>…
+            Uploading and analysing <span className="font-mono text-ink">{phase.name}</span>…
             <span className="ml-2 text-xs text-ink-faint">(progress is indeterminate: the server analyses before responding)</span>
           </p>
         )}
@@ -99,6 +109,6 @@ export function UploadPanel({ onUploaded }: { onUploaded: (r: UploadResponse) =>
           </p>
         )}
       </div>
-    </Panel>
+    </section>
   );
 }

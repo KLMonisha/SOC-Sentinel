@@ -112,8 +112,6 @@
 .ln-loader-note { position: absolute; bottom: 8vh; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.18em; color: #4f625c; }
 
 .ln-poster { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; object-fit: cover; object-position: 70% 50%; }
-.ln-leave { position: fixed; inset: 0; z-index: 60; background: var(--void); opacity: 0; pointer-events: none; transition: opacity 0.5s ease; }
-.ln-leave[data-on="true"] { opacity: 1; pointer-events: auto; }
 
 .ln-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
@@ -129,3 +127,15 @@
   .ln-cue span { animation: none; transform: none; }
   .ln-pre .ln-letter { opacity: 1; }
 }
+
+/* Entering the application (see app/transition). Everything here is inert unless a transition sets data-leaving. */
+.ln-cta.is-pressed { background: #b9fff4; box-shadow: 0 0 46px rgba(99, 235, 216, 0.6); transform: none; }
+.ln[data-leaving="leave"] .ln-back, .ln[data-leaving="leave"] .ln-front, .ln[data-leaving="leave"] .ln-ui,
+.ln[data-leaving="handover"] .ln-back, .ln[data-leaving="handover"] .ln-front, .ln[data-leaving="handover"] .ln-ui { opacity: 0; transition: opacity 0.6s ease 0.18s; }
+.ln[data-leaving="handover"] .ln-haze, .ln[data-leaving="handover"] .ln-grain, .ln[data-leaving="handover"] .ln-vignette { opacity: 0; transition: opacity 0.9s ease; }
+.ln[data-leaving="fade"] { opacity: 0; transition: opacity 0.5s ease; }
+.ln[data-leaving="fade"] .ln-cta { background: #b9fff4; }
+.ln[data-leaving="handover"] { background: transparent; }
+.ln-host--overlay { position: fixed; inset: 0; z-index: 80; overflow: hidden; }
+.ln-host--overlay[data-phase="revealing"] { pointer-events: none; }
+.ln-host--overlay .ln { height: 100%; }

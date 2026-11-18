@@ -3,7 +3,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { buildRibbon } from "./ribbon";
 import { damp, lerp, smoothstep, type SceneState } from "./sceneState";
-import { SIGNAL_FRAG, SIGNAL_VERT, SURFACE_FRAG, SURFACE_VERT } from "./shaders";
+import { LINE_FRAG, LINE_VERT, SIGNAL_FRAG, SIGNAL_VERT, SURFACE_FRAG, SURFACE_VERT } from "./shaders";
 
 /** Deterministic PRNG so the signal field is identical on every load. */
 function mulberry32(seed: number) {
@@ -51,6 +51,7 @@ function useGeometry() {
     signals.setAttribute("aTv", new THREE.BufferAttribute(tv, 3));
     signals.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
     signals.setAttribute("aSeed", new THREE.BufferAttribute(seed, 4));
+    signals.setAttribute("aTarget", new THREE.BufferAttribute(new Float32Array(n * 3), 3));
     return { surface, signals };
   }, []);
 }
@@ -66,6 +67,8 @@ function makeUniforms() {
     uClick: { value: new THREE.Vector3() },
     uRipple: { value: new THREE.Vector2(-9, 0) },
     uPixel: { value: 1 },
+    uLeave: { value: 0 },
+    uHandover: { value: 0 },
   };
 }
 
@@ -90,7 +93,25 @@ function Singularity({ state, paused }: { state: SceneState; paused: boolean }) 
     [uniforms],
   );
 
-  useEffect(() => () => { geo.surface.dispose(); geo.signals.dispose(); surfaceMat.dispose(); signalMat.dispose(); }, [geo, surfaceMat, signalMat]);
+  // Connections drawn between reconstructed interface points while entering the app. Hidden otherwise.
+  const lineGeo = useMemo(() => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(6), 3));
+    return g;
+  }, []);
+  const lineMat = useMemo(
+    () => new THREE.ShaderMaterial({
+      vertexShader: LINE_VERT, fragmentShader: LINE_FRAG, uniforms: { uAlpha: { value: 0 } },
+      transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
+    }),
+    [],
+  );
+  const lines = useRef<THREE.LineSegments>(null);
+  const appliedTargets = useRef(0);
+
+  useEffect(() => () => {
+    geo.surface.dispose(); geo.signals.dispose(); surfaceMat.dispose(); signalMat.dispose(); lineGeo.dispose(); lineMat.dispose();
+  }, [geo, surfaceMat, signalMat, lineGeo, lineMat]);
   useEffect(() => { uniforms.uPixel.value = gl.getPixelRatio(); }, [gl, uniforms]);
 
   const tmp = useMemo(() => new THREE.Vector3(), []);
@@ -121,7 +142,9 @@ function Singularity({ state, paused }: { state: SceneState; paused: boolean }) 
     s.energy = damp(s.energy, Math.min(1, speed * 0.6), 2.0, dt);
     s.scroll = damp(s.scroll, state.scroll, 6, dt);
     const p = s.scroll;
-    const dissolveT = calm ? 0 : smoothstep(0.2, 0.86, p);
+    state.frameMs = damp(state.frameMs, rawDt * 1000, 3, Math.min(rawDt, 0.25));
+    // Entering the app drives the same dissolve the scroll does, then the reconstruct stage takes over.
+    const dissolveT = Math.max(calm ? 0 : smoothstep(0.2, 0.86, p), smoothstep(0, 0.45, state.leave));
     s.dissolve = damp(s.dissolve, dissolveT, 7, dt);
     s.amp = damp(s.amp, 0.35 + 0.65 * smoothstep(0.0, 0.7, state.intro), 3, dt);
 
@@ -161,6 +184,34 @@ function Singularity({ state, paused }: { state: SceneState; paused: boolean }) 
       }
     } else uniforms.uRipple.value.set(-9, 0);
 
+    // Upload reconstruct targets once per version.
+    const tg = state.targets;
+    if (tg && tg.version !== appliedTargets.current) {
+      appliedTargets.current = tg.version;
+      const attr = geo.signals.getAttribute("aTarget") as THREE.BufferAttribute;
+      const arr = attr.array as Float32Array;
+      const n = arr.length / 3;
+      const m = tg.points.length / 3;
+      for (let i = 0; i < n; i++) {
+        // Spread the interface points across all signals deterministically; surplus signals fade out.
+        if (i < m) { arr[i * 3] = tg.points[i * 3]!; arr[i * 3 + 1] = tg.points[i * 3 + 1]!; arr[i * 3 + 2] = 1; }
+        else { arr[i * 3] = 0; arr[i * 3 + 1] = 0; arr[i * 3 + 2] = 0; }
+      }
+      attr.needsUpdate = true;
+      const seg = tg.lines.length / 4;
+      const pos = new Float32Array(seg * 6);
+      for (let i = 0; i < seg; i++) {
+        pos[i * 6] = tg.lines[i * 4]!; pos[i * 6 + 1] = tg.lines[i * 4 + 1]!;
+        pos[i * 6 + 3] = tg.lines[i * 4 + 2]!; pos[i * 6 + 4] = tg.lines[i * 4 + 3]!;
+      }
+      lineGeo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    }
+    const la = smoothstep(0.72, 0.97, state.leave) * (1 - state.handover) * 0.55;
+    lineMat.uniforms.uAlpha!.value = la;
+    if (lines.current) lines.current.visible = la > 0.001;
+    uniforms.uLeave.value = state.leave;
+    uniforms.uHandover.value = state.handover;
+
     uniforms.uTime.value = t;
     uniforms.uAmp.value = s.amp;
     uniforms.uIntro.value = state.intro;
@@ -172,6 +223,7 @@ function Singularity({ state, paused }: { state: SceneState; paused: boolean }) 
     <group ref={group}>
       <mesh geometry={geo.surface} material={surfaceMat} frustumCulled={false} />
       <points geometry={geo.signals} material={signalMat} frustumCulled={false} />
+      <lineSegments ref={lines} geometry={lineGeo} material={lineMat} frustumCulled={false} visible={false} />
     </group>
   );
 }

@@ -1,59 +1,38 @@
-import { NavLink, Outlet } from "react-router-dom";
-import { Radar, FolderSearch, GitCompareArrows, Crosshair, ShieldAlert } from "lucide-react";
-import { config } from "@/lib/config";
+import { AnimatePresence, motion } from "motion/react";
+import { useLocation, useOutlet } from "react-router-dom";
+import { useReducedMotion } from "@/lib/useReducedMotion";
+import { ContextBar } from "./ContextBar";
+import { Rail } from "./Rail";
+import { useTransition } from "./transition/TransitionProvider";
 
-const NAV = [
-  { to: "/app", label: "Command Center", Icon: Radar, end: true },
-  { to: "/app/evidence", label: "Evidence Room", Icon: FolderSearch, end: false },
-  { to: "/app/counterfactual", label: "Counterfactual Lab", Icon: GitCompareArrows, end: false },
-  { to: "/app/investigate", label: "Investigation Lab", Icon: Crosshair, end: false },
-  { to: "/app/red-team", label: "Red Team Lab", Icon: ShieldAlert, end: false },
-];
-
+/** Persistent shell: rail, context bar and a stage whose content cross-fades between sections. */
 export function AppShell() {
+  const { stage } = useTransition();
+  const outlet = useOutlet();
+  const { pathname } = useLocation();
+  const reduced = useReducedMotion();
+  const section = pathname.split("/")[2] ?? "";
+
   return (
-    <div className="grid h-full grid-cols-[220px_1fr] grid-rows-[48px_1fr]">
-      <header className="col-span-2 flex items-center justify-between border-b border-line bg-surface px-4">
-        <div className="flex items-baseline gap-3">
-          <span className="text-sm font-semibold tracking-wide">SOC SENTINEL</span>
-          <span className="hidden text-xs text-ink-faint sm:inline">What would change my mind?</span>
-        </div>
-        <div className="flex items-center gap-3 font-mono text-[11px]">
-          {config.useMocks && (
-            <span
-              className="border border-suspicious/50 px-2 py-0.5 text-suspicious"
-              title="Responses are development fixtures, not backend data"
+    <div className="app-env">
+      <Rail visible={stage >= 1} />
+      <div className="relative z-[2] flex h-full flex-col pl-[var(--rail-w)]">
+        <ContextBar visible={stage >= 1} />
+        <main className="page-stage min-h-0 flex-1 overflow-auto">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={section}
+              initial={reduced ? false : { opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={reduced ? { opacity: 0 } : { opacity: 0, y: -6 }}
+              transition={{ duration: reduced ? 0 : 0.26, ease: [0.22, 1, 0.36, 1] }}
+              className="min-h-full"
             >
-              MOCK DATA
-            </span>
-          )}
-          <span className="border border-line-strong px-2 py-0.5 text-ink-muted">CONTAINMENT: DRY-RUN</span>
-        </div>
-      </header>
-      <nav aria-label="Primary" className="border-r border-line bg-surface p-2">
-        <ul className="space-y-0.5">
-          {NAV.map(({ to, label, Icon, end }) => (
-            <li key={to}>
-              <NavLink
-                to={to}
-                end={end}
-                className={({ isActive }) =>
-                  `flex items-center gap-2.5 border-l-2 px-3 py-2 text-[13px] ${
-                    isActive
-                      ? "border-verified bg-surface-2 text-ink"
-                      : "border-transparent text-ink-muted hover:bg-surface-2 hover:text-ink"
-                  }`
-                }
-              >
-                <Icon size={15} aria-hidden /> {label}
-              </NavLink>
-            </li>
-          ))}
-        </ul>
-      </nav>
-      <main className="overflow-auto p-6">
-        <Outlet />
-      </main>
+              {outlet}
+            </motion.div>
+          </AnimatePresence>
+        </main>
+      </div>
     </div>
   );
 }

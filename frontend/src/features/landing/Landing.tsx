@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } fr
 import { Link, useNavigate } from "react-router-dom";
 import gsap from "gsap";
 import Lenis from "lenis";
+import { useTransitionOptional, type LandingController } from "@/app/transition/TransitionProvider";
 import { useReducedMotion } from "@/lib/useReducedMotion";
 import "./landing.css";
 import { SingularityScene } from "./SingularityScene";
@@ -47,7 +48,8 @@ export default function Landing() {
   const [glFailed, setGlFailed] = useState(false);
   const useGl = webgl && !glFailed;
   const [pre, setPre] = useState(true);
-  const [leaving, setLeaving] = useState(false);
+  const [pressed, setPressed] = useState(false);
+  const transition = useTransitionOptional();
   const [posterOk, setPosterOk] = useState(true);
 
   const state = useMemo(createSceneState, []);
@@ -65,6 +67,7 @@ export default function Landing() {
     const track = trackRef.current;
     if (!root || !track) return;
     const update = () => {
+      if (state.frozen) return; // leaving: the document is about to change height; keep the scene where it is
       const max = track.offsetHeight - window.innerHeight;
       const p = max > 0 ? Math.min(1, Math.max(0, window.scrollY / max)) : 0;
       state.scroll = p;
@@ -154,15 +157,47 @@ export default function Landing() {
     return () => { cancelled = true; ctx.revert(); };
   }, [calm, state, useGl]);
 
+  // Lets the transition coordinator drive the scene while entering the app. Nothing here runs unless it does.
+  const glRef = useRef(useGl);
+  glRef.current = useGl;
+  useEffect(() => {
+    if (!transition) return;
+    const root = () => rootRef.current;
+    const ctrl: LandingController = {
+      isReady: () => glRef.current && state.ready,
+      frameMs: () => state.frameMs,
+      begin: () => { state.frozen = true; lenisRef.current?.stop(); },
+      setLeave: (v) => { state.leave = v; },
+      setHandover: (v) => { state.handover = v; },
+      setTargets: (t) => { state.targets = t; },
+      setLook: (l) => {
+        const r = root();
+        if (!r) return;
+        if (l === "none") delete r.dataset.leaving;
+        else r.dataset.leaving = l;
+      },
+      reset: () => {
+        state.frozen = false; state.leave = 0; state.handover = 0; state.targets = null;
+        const r = root();
+        if (r) delete r.dataset.leaving;
+        setPressed(false);
+        lenisRef.current?.start();
+        window.dispatchEvent(new Event("scroll"));
+      },
+    };
+    transition.registerLanding(ctrl);
+    return () => transition.registerLanding(null);
+  }, [transition, state]);
+
   useEffect(() => { document.title = "SOC Sentinel — What would change my mind?"; }, []);
 
   const enter = useCallback((e: MouseEvent<HTMLAnchorElement>) => {
     if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     e.preventDefault();
-    if (calm) { navigate("/app"); return; }
-    setLeaving(true);
-    window.setTimeout(() => navigate("/app"), 520);
-  }, [calm, navigate]);
+    setPressed(true); // immediate mint response
+    if (transition) transition.enter("/app");
+    else navigate("/app");
+  }, [navigate, transition]);
 
   const explore = useCallback(() => {
     const track = trackRef.current;
@@ -184,7 +219,6 @@ export default function Landing() {
         <div className="ln-loader-word" data-text="SOC SENTINEL">SOC SENTINEL</div>
         <div className="ln-loader-note">ILLUSTRATIVE SCENE · NOT LIVE TELEMETRY</div>
       </div>
-      <div className="ln-leave" data-on={leaving} aria-hidden />
 
       <h1 className="ln-sr">SOC Sentinel. What would change my mind?</h1>
 
@@ -231,7 +265,7 @@ export default function Landing() {
             </div></div>
 
             <div className="ln-cta-wrap"><div className="ln-fade ln-cta-stack">
-              <Link to="/app" className="ln-cta" onClick={enter}>
+              <Link to="/app" className={`ln-cta ${pressed ? "is-pressed" : ""}`} onClick={enter}>
                 <i /><i /><i /><i />
                 Enter SOC Sentinel <Arrow />
               </Link>

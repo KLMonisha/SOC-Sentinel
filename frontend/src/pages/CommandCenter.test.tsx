@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, test, vi } from "vitest";
@@ -42,7 +42,8 @@ describe("Command Center", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Backend down");
     expect(screen.getByRole("alert")).toHaveTextContent("req-42");
     await userEvent.click(screen.getByRole("button", { name: "Retry" }));
-    expect(await screen.findByText("Brute force on alice")).toBeInTheDocument();
+    // The title also labels the Case Field mark, so assert on the queue table specifically.
+    expect(within(await screen.findByRole("table")).getByText("Brute force on alice")).toBeInTheDocument();
   });
 
   test("orders by severity and filters by search text", async () => {
@@ -52,7 +53,7 @@ describe("Command Center", () => {
     const rows = screen.getAllByRole("row").slice(1);
     expect(rows[0]).toHaveTextContent("Brute force on alice");
     await userEvent.type(screen.getByRole("textbox", { name: /search cases/i }), "low");
-    expect(screen.queryByText("Brute force on alice")).not.toBeInTheDocument();
+    expect(within(screen.getByRole("table")).queryByText("Brute force on alice")).not.toBeInTheDocument();
     await userEvent.clear(screen.getByRole("textbox", { name: /search cases/i }));
     await userEvent.type(screen.getByRole("textbox", { name: /search cases/i }), "zzz");
     expect(screen.getByText("No cases match")).toBeInTheDocument();

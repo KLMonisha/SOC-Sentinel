@@ -4,7 +4,8 @@
  * so the UI can be built against realistic failure modes. It is NOT a security
  * engine: counterfactual output here is a simplified stand-in for the backend rerun.
  */
-import { adversarialExample, ambHiddenEvents, cases as seed, meta, reports } from "./fixtures";
+import { devCases, devReports } from "./devCases";
+import { adversarialExample, ambHiddenEvents, cases as seed, meta, reports as seedReports } from "./fixtures";
 import {
   ERROR_CODES,
   MAX_ADVERSARIAL_TRIALS,
@@ -34,7 +35,8 @@ const err = (status: number, code: string, message: string): MockResult => ({
 });
 
 // Session state: mutated only by investigate/decision. Counterfactuals never touch it.
-const state: Record<string, CaseDetail> = structuredClone(seed);
+const state: Record<string, CaseDetail> = structuredClone({ ...seed, ...devCases });
+const reports = { ...seedReports, ...devReports };
 const idempotent = new Map<string, InvestigateResponse>();
 
 const band = (v: number): RiskBand => (v >= 70 ? "high" : v >= 25 ? "investigate" : "low");

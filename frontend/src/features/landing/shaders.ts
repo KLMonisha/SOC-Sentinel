@@ -213,6 +213,9 @@ attribute vec3 aTu;
 attribute vec3 aTv;
 attribute vec4 aSeed;
 uniform float uPixel;
+uniform float uLeave;
+uniform float uHandover;
+attribute vec3 aTarget;
 varying float vAlpha;
 varying vec3 vColor;
 
@@ -239,12 +242,26 @@ void main() {
   pos = mix(pos, centre + dir * (0.3 + mag * 0.45), g * 0.85);
 
   vec4 mv = modelViewMatrix * vec4(pos, 1.0);
-  gl_Position = projectionMatrix * mv;
-  gl_PointSize = (2.6 + 3.4 * aSeed.x) * uPixel * (7.0 / -mv.z);
+  vec4 clip = projectionMatrix * mv;
+  float ps = (2.6 + 3.4 * aSeed.x) * uPixel * (7.0 / -mv.z);
 
   float c = fract(aSeed.x * 7.13 + aSeed.y * 3.7);
   vColor = c < 0.72 ? vec3(0.85, 0.9, 0.9) : (c < 0.95 ? vec3(0.3, 1.0, 0.82) : vec3(1.0, 0.66, 0.3));
   vAlpha = smoothstep(0.0, 0.12, rel) * (0.7 + 0.3 * aSeed.z);
+
+  // Entering the app (inactive while uLeave == 0, so the landing renders exactly as approved):
+  // the signals compress toward the centre, then flow to screen-space targets along the real interface.
+  if (uLeave > 0.0) {
+    clip.xy = mix(clip.xy, vec2(0.0), smoothstep(0.0, 0.5, uLeave) * 0.55);
+    float k = smoothstep(0.5 + 0.2 * aSeed.z, 0.97, uLeave) * aTarget.z;
+    clip = mix(clip, vec4(aTarget.xy * clip.w, clip.z, clip.w), k);
+    ps = mix(ps, 2.4 * uPixel, k);
+    vAlpha = mix(vAlpha, 0.9, k);
+    vAlpha *= 1.0 - smoothstep(0.6, 0.95, uLeave) * (1.0 - aTarget.z);
+  }
+  vAlpha *= 1.0 - uHandover;
+  gl_Position = clip;
+  gl_PointSize = ps;
 }
 `;
 
@@ -257,4 +274,13 @@ void main() {
   if (a < 0.01) discard;
   gl_FragColor = vec4(vColor * a, a);
 }
+`;
+
+// Screen-space connections between reconstructed interface points (NDC in, no projection).
+export const LINE_VERT = /* glsl */ `
+void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }
+`;
+export const LINE_FRAG = /* glsl */ `
+uniform float uAlpha;
+void main() { gl_FragColor = vec4(vec3(0.39, 0.92, 0.85) * uAlpha, uAlpha); }
 `;
