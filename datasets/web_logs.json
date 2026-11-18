@@ -1,0 +1,18 @@
+[
+  {
+    "time": "2026-11-18T10:03:00Z",
+    "user": "alice",
+    "source_ip": "192.0.2.10",
+    "path": "/admin",
+    "status": 403,
+    "host": "web-01"
+  },
+  {
+    "time": "2026-11-18T10:04:00Z",
+    "user": "alice",
+    "source_ip": "192.0.2.10",
+    "path": "/dashboard",
+    "status": 200,
+    "host": "web-01"
+  }
+]

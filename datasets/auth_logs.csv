@@ -1,0 +1,5 @@
+timestamp,username,ip,event,host
+2026-11-18T10:00:00Z,alice,192.0.2.10,failed_login,server-01
+2026-11-18T10:01:00Z,alice,192.0.2.10,failed_login,server-01
+2026-11-18T10:02:00Z,alice,192.0.2.10,success_login,server-01
+2026-11-18T10:05:00Z,bob,198.51.100.20,success_login,server-02
