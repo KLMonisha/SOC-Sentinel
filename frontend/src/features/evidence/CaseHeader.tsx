@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, FileText } from "lucide-react";
 import { VerdictLabel } from "@/components/ui/Badges";
 import { STATUS_LABEL } from "@/lib/format";
+import { reportPath } from "@/features/report/citations";
 import { useInvestigation } from "./InvestigationProvider";
 
 function Metric({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
@@ -41,6 +42,9 @@ export function CaseHeader() {
           </Metric>
           <Metric label="Status">{STATUS_LABEL[s.status]}</Metric>
         </div>
+        <Link to={reportPath(s.case_id)} className="inline-flex items-center gap-2 border border-verified/50 px-3.5 py-2 text-[11px] uppercase tracking-[0.16em] text-verified transition-colors hover:bg-verified/10">
+          <FileText size={13} aria-hidden /> Report
+        </Link>
       </div>
       {replaying && (
         <p role="note" className="border-t border-line px-4 py-1.5 text-[11px] text-suspicious">

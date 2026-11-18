@@ -1,6 +1,7 @@
 # SOC Sentinel API Contract v1.0
 
 **Status: decisions below CONFIRMED by Member 1. Field-level details marked ⚠ are still open.**
+**Backend reality check (2026-11-19): see `INTEGRATION_STATUS.md`. `origin/backend-dev` implements only `/api/analyze` and a stateless `/api/counterfactual`; the frontend has run against the in-app mock only.**
 Field shapes: `frontend/src/api/types.ts` (frontend's reading of the agreement). Scope source: `docs/SOC_Sentinel_Revised_24_Hour_Build_Plan.docx` §9.
 
 ## Conventions (confirmed)
@@ -55,3 +56,13 @@ The Evidence Room derives its graph in a replaceable adapter (`frontend/src/feat
 - **Unresolved citations:** any `event_id` (finding, ATT&CK mapping, edge) that is not in `events[]` is displayed as "unresolved", never hidden. Every citation must resolve (confirmed item 9).
 - **Fields not in the contract are not displayed:** destination IP and any per-event dataset ID are not shown. If wanted, they must be added to `SourceEvent`.
 - Replay shows a note that verdict/risk/confidence are for the full investigation, because the backend provides no historical (as-of) verdicts.
+
+## Phase 6 frontend assumptions (Report, citations, decisions) ⚠ provisional
+
+- `GET /api/cases/{id}/report` is **read-only for the UI**: the frontend never asks for regeneration and re-reads it only on page load.
+- Every `claims[].citations[]` id must resolve to an event in `GET /api/cases/{id}`. Unresolved citations are **displayed as unresolved** (not linked, not dropped); claims with `verified: false` or no citations are shown with their `verification_note`.
+- Report chronology is built from `CaseDetail.events` (ordered by timestamp, source_file, line_number, event_id); `CaseDetail.timeline` is unused (open item 2).
+- Deep link convention: `/app/evidence/{case_id}?event={event_id}` selects that event (revealing it if replay hid it). The URL follows the selection.
+- `POST …/decision`: `analyst_id` required (trimmed); `note` optional (omitted when blank; open item 9 on whether a reason is required for reject). The UI asks for explicit confirmation, sends one request per confirmation, and never claims anything beyond "decision recorded, dry run".
+- **Repeated decisions** are not assumed impossible: the UI lets the analyst attempt another decision, shows every returned `decisions[]` record oldest first (sorted client-side by `decided_at`; open item 9 asks for server ordering), and surfaces any backend refusal as an error.
+- Approve/reject are disabled when `containment` is `null` (nothing to decide on).

@@ -13,18 +13,24 @@ const SECTIONS: Record<string, string> = {
 
 export function ContextBar({ visible }: { visible: boolean }) {
   const { pathname } = useLocation();
-  const [, , section = "", id] = pathname.split("/");
+  const [, , section = "", id, sub] = pathname.split("/");
   const title = SECTIONS[section] ?? "Workspace";
   return (
     <header className="ctx-bar" data-bridge style={{ opacity: visible ? 1 : 0, transition: "opacity 0.7s ease" }}>
       <nav aria-label="Breadcrumb" className="flex min-w-0 flex-1 items-center gap-2.5">
         <span className="t-label hidden sm:inline">Workspace</span>
         <ChevronRight size={12} aria-hidden className="hidden text-ink-faint sm:inline" />
-        <Link to={`/app${section ? `/${section}` : ""}`} className="t-micro truncate text-ink hover:text-verified">{title}</Link>
+        <Link to={`/app${section ? `/${section}` : ""}`} className={`t-micro truncate text-ink hover:text-verified ${id ? "hidden sm:inline" : ""}`}>{title}</Link>
         {id && (
           <>
+            <ChevronRight size={12} aria-hidden className="hidden text-ink-faint sm:inline" />
+            <span className={`truncate font-mono text-[12px] text-ink-muted ${sub ? "hidden sm:inline" : ""}`} title={decodeURIComponent(id)}>{decodeURIComponent(id)}</span>
+          </>
+        )}
+        {sub === "report" && (
+          <>
             <ChevronRight size={12} aria-hidden className="text-ink-faint" />
-            <span className="truncate font-mono text-[12px] text-ink-muted" title={decodeURIComponent(id)}>{decodeURIComponent(id)}</span>
+            <span className="t-micro text-ink">Report</span>
           </>
         )}
       </nav>

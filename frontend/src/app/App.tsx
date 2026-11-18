@@ -5,6 +5,7 @@ import { TransitionProvider } from "./transition/TransitionProvider";
 import { CommandCenter } from "@/pages/CommandCenter";
 import { EvidenceRoom, EvidenceRoomIndex } from "@/pages/EvidenceRoom";
 import { Placeholder } from "@/pages/Placeholder";
+import { ReportPage } from "@/pages/ReportPage";
 
 /** Deep links from before the landing page existed (`/evidence/case_x`) keep working under `/app`. */
 function LegacyEvidenceRedirect() {
@@ -23,6 +24,7 @@ export function App() {
           <Route index element={<CommandCenter />} />
           <Route path="evidence" element={<EvidenceRoomIndex />} />
           <Route path="evidence/:caseId" element={<EvidenceRoom />} />
+          <Route path="evidence/:caseId/report" element={<ReportPage />} />
           <Route path="counterfactual" element={<Placeholder title="Counterfactual Investigation Lab" phase="Phase 7" />} />
           <Route path="investigate" element={<Placeholder title="Investigation Lab" phase="Phase 8" />} />
           <Route path="red-team" element={<Placeholder title="Red Team Lab" phase="Phase 9" />} />

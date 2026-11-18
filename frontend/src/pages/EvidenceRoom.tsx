@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ApiError, api } from "@/api/client";
 import type { CaseDetail } from "@/api/types";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Panel } from "@/components/ui/Panel";
+import { DecisionPanel } from "@/features/decision/DecisionPanel";
 import { AnalysisPanel } from "@/features/evidence/AnalysisPanel";
 import { CaseHeader } from "@/features/evidence/CaseHeader";
 import { Constellation } from "@/features/evidence/Constellation";
@@ -18,9 +19,32 @@ type Load = { kind: "loading" } | { kind: "error"; error: ApiError | Error } | {
 const tab = (active: boolean) =>
   `px-3 py-1.5 text-[12px] border-b-2 ${active ? "border-verified text-ink" : "border-transparent text-ink-muted hover:text-ink"}`;
 
-function Workspace() {
-  const { state, dispatch, graph, layout, highlight, fullGraph, selectNode } = useInvestigation();
+function Workspace({ onReload }: { onReload: () => Promise<void> }) {
+  const { state, dispatch, graph, layout, highlight, fullGraph, selectNode, selectEvent, caseDetail } = useInvestigation();
   const reduce = useReducedMotion();
+
+  // The selected event lives in the URL (?event=evt_...) so report citations, refresh and shared links all
+  // land on the same evidence. URL -> state first (revealing it if replay had hidden it), then state -> URL.
+  const [params, setParams] = useSearchParams();
+  const urlEvent = params.get("event");
+  const selected = state.selection?.kind === "node" && state.selection.id.startsWith("event:") ? state.selection.id.slice("event:".length) : null;
+  const [synced, setSynced] = useState(false);
+  useEffect(() => {
+    if (urlEvent && urlEvent !== selected) {
+      dispatch({ type: "showAll" });
+      selectEvent(urlEvent);
+    }
+    setSynced(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlEvent]);
+  useEffect(() => {
+    if (!synced || selected === urlEvent) return;
+    const next = new URLSearchParams(params);
+    if (selected) next.set("event", selected);
+    else next.delete("event");
+    setParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, synced]);
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
       <div className="min-w-0 space-y-4">
@@ -56,13 +80,14 @@ function Workspace() {
         <div role="tablist" aria-label="Details" className="flex border-b border-line px-2">
           <button role="tab" aria-selected={state.panel === "analysis"} className={tab(state.panel === "analysis")} onClick={() => dispatch({ type: "setPanel", panel: "analysis" })}>Analysis</button>
           <button role="tab" aria-selected={state.panel === "inspector"} className={tab(state.panel === "inspector")} onClick={() => dispatch({ type: "setPanel", panel: "inspector" })}>Inspector</button>
+          <button role="tab" aria-selected={state.panel === "decision"} className={tab(state.panel === "decision")} onClick={() => dispatch({ type: "setPanel", panel: "decision" })}>Decision</button>
         </div>
         <div className="max-h-[calc(100vh-180px)] overflow-auto p-4">
           <motion.div
-            key={state.panel === "inspector" ? `i:${state.selection?.id ?? ""}` : "a"}
+            key={state.panel === "inspector" ? `i:${state.selection?.id ?? ""}` : state.panel}
             initial={reduce ? false : { opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}
           >
-            {state.panel === "analysis" ? <AnalysisPanel /> : <Inspector />}
+            {state.panel === "analysis" ? <AnalysisPanel /> : state.panel === "decision" ? <DecisionPanel caseDetail={caseDetail} onDecided={onReload} /> : <Inspector />}
           </motion.div>
         </div>
       </aside>
@@ -90,6 +115,12 @@ export function EvidenceRoom() {
     return () => ctrl.abort();
   }, [fetchCase]);
 
+  // Re-read the case without resetting replay or selection (used after an analyst decision).
+  const reload = useCallback(async () => {
+    const data = await api.getCase(caseId);
+    setLoad({ kind: "ready", data });
+  }, [caseId]);
+
   if (load.kind === "loading") return <p role="status" className="text-[13px] text-ink-muted">Loading case…</p>;
 
   if (load.kind === "error") {
@@ -115,7 +146,7 @@ export function EvidenceRoom() {
         {load.data.events.length === 0 ? (
           <EmptyState title="No source events" detail="This case has no stored source events to explore." />
         ) : (
-          <Workspace />
+          <Workspace onReload={reload} />
         )}
       </div>
     </InvestigationProvider>

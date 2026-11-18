@@ -2,7 +2,7 @@
 
 export type Selection = { kind: "node" | "edge"; id: string };
 export type CenterView = "graph" | "list";
-export type SidePanel = "inspector" | "analysis";
+export type SidePanel = "inspector" | "analysis" | "decision";
 
 export interface InvState {
   /** Total number of events in the case. */
