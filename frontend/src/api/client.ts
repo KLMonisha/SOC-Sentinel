@@ -1,5 +1,7 @@
 import { config } from "@/lib/config";
 import {
+  ERROR_CODES,
+  MAX_ADVERSARIAL_TRIALS,
   SCHEMA_VERSION,
   type AdversarialRequest,
   type AdversarialResponse,
@@ -29,6 +31,12 @@ export class ApiError extends Error {
     this.name = "ApiError";
   }
 }
+
+export const isBudgetExhausted = (e: unknown): boolean =>
+  e instanceof ApiError && e.code === ERROR_CODES.BUDGET_EXHAUSTED;
+
+/** One key per user-initiated investigation; reuse it on retry so budget is not spent twice. */
+export const newIdempotencyKey = (): string => crypto.randomUUID();
 
 type Method = "GET" | "POST";
 interface RequestOptions {
@@ -119,8 +127,14 @@ export const api = {
     request<CounterfactualResponse>("POST", `/api/cases/${enc(id)}/counterfactual`, { body, signal }),
   investigate: (id: string, body: InvestigateRequest, signal?: AbortSignal) =>
     request<InvestigateResponse>("POST", `/api/cases/${enc(id)}/investigate`, { body, signal }),
-  runAdversarial: (body: AdversarialRequest, signal?: AbortSignal) =>
-    request<AdversarialResponse>("POST", "/api/adversarial/run", { body, signal }),
+  runAdversarial: (body: AdversarialRequest, signal?: AbortSignal) => {
+    if (!Number.isInteger(body.trials) || body.trials < 1 || body.trials > MAX_ADVERSARIAL_TRIALS) {
+      return Promise.reject(
+        new ApiError(`Trials must be an integer from 1 to ${MAX_ADVERSARIAL_TRIALS}.`, "invalid_request", null, null),
+      );
+    }
+    return request<AdversarialResponse>("POST", "/api/adversarial/run", { body, signal });
+  },
   decide: (id: string, body: DecisionRequest, signal?: AbortSignal) =>
     request<DecisionResponse>("POST", `/api/cases/${enc(id)}/decision`, { body, signal }),
 };

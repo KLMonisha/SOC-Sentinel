@@ -8,7 +8,6 @@ import {
   type AdversarialResponse,
   type CaseDetail,
   type CaseOutcome,
-  type CounterfactualResponse,
   type Finding,
   type ReportResponse,
   type SourceEvent,
@@ -69,6 +68,7 @@ export const bruteForceCase: CaseDetail = {
   ...meta("case_bf"),
   summary: {
     case_id: "case_bf",
+    dataset_id: "ds_mock_1",
     title: "Brute-force escalation against alice",
     status: "open",
     verdict: bfOutcome.verdict,
@@ -79,7 +79,7 @@ export const bruteForceCase: CaseDetail = {
     first_seen: bfEvents[0]!.timestamp,
     last_seen: bfEvents[bfEvents.length - 1]!.timestamp,
   },
-  dataset_id: "ds_mock_1",
+  verdict_rationale: "Three independent rules fired on one IP within 7 minutes; no benign context (VPN, maintenance) is available.",
   confidence: bfOutcome.confidence,
   coverage: { ratio: 0.5, present: ["authentication logs", "web server logs"], missing: ["VPN gateway logs", "endpoint telemetry"] },
   findings: bfFindings,
@@ -110,6 +110,7 @@ export const bruteForceCase: CaseDetail = {
     ],
   },
   events: bfEvents,
+  timeline: bfEvents.map((e) => ({ event_id: e.event_id, timestamp: e.timestamp, label: e.event_type })),
   planner: { budget_total: 3, budget_remaining: 3, candidates: [] },
   containment: { action: "Block source IP at perimeter and force password reset", target: `${IP} / alice`, rationale: "Success after repeated failures with sensitive access.", dry_run: true },
   decisions: [],
@@ -131,6 +132,7 @@ export const ambiguousCase: CaseDetail = {
   ...meta("case_amb"),
   summary: {
     case_id: "case_amb",
+    dataset_id: "ds_mock_1",
     title: "Ambiguous login pattern for bob",
     status: "open",
     verdict: ambOutcome.verdict,
@@ -141,7 +143,7 @@ export const ambiguousCase: CaseDetail = {
     first_seen: ambEvents[0]!.timestamp,
     last_seen: ambEvents[1]!.timestamp,
   },
-  dataset_id: "ds_mock_1",
+  verdict_rationale: "A single failure-then-success pair is consistent with both a forgotten password and a takeover; the loaded data cannot separate them.",
   confidence: ambOutcome.confidence,
   coverage: { ratio: 0.33, present: ["authentication logs"], missing: ["post-login activity", "IP context"] },
   findings: ambOutcome.findings,
@@ -155,6 +157,7 @@ export const ambiguousCase: CaseDetail = {
     edges: [{ id: "e10", source: "ip_2", target: "u_bob", relation: "authenticated_as", state: "observed", event_ids: ["evt_0012"] }],
   },
   events: ambEvents,
+  timeline: ambEvents.map((e) => ({ event_id: e.event_id, timestamp: e.timestamp, label: e.event_type })),
   planner: {
     budget_total: 3,
     budget_remaining: 3,
@@ -168,29 +171,31 @@ export const ambiguousCase: CaseDetail = {
   decisions: [],
 };
 
+/** Events that exist in the dataset but are not yet part of case_amb (planner reveals them). */
+export const ambHiddenEvents: SourceEvent[] = [
+  ev(13, 23, "web_access", "success", { username: "bob", source_ip: "198.51.100.20", host: "web-01", resource: "/dashboard", source_file: "web_logs.json", raw_text: "2026-11-18T10:23:00Z,bob,198.51.100.20,GET /dashboard 200,web-01" }),
+  ev(14, 24, "web_access", "success", { username: "bob", source_ip: "198.51.100.20", host: "web-01", resource: "/profile", source_file: "web_logs.json", raw_text: "2026-11-18T10:24:00Z,bob,198.51.100.20,GET /profile 200,web-01" }),
+];
+
 export const cases: Record<string, CaseDetail> = { case_bf: bruteForceCase, case_amb: ambiguousCase };
 
-// ---- Counterfactual: mark IP as corporate VPN ----
-const cfFindings = bfFindings.map((f) => (f.finding_id === "f_sa" ? { ...f, weight: 10, severity: "medium" as const } : f));
-export const vpnCounterfactual: CounterfactualResponse = {
-  ...meta("cf"),
-  case_id: "case_bf",
-  original: bfOutcome,
-  recomputed: {
-    verdict: "needs_investigation",
-    risk_score: { value: 60, band: "investigate", reasoning: ["Verified corporate VPN context −15 applied after rerun"] },
-    confidence: { level: "medium", rationale: "VPN context reduces risk; sensitive access remains unexplained." },
-    findings: cfFindings,
-    graph: { nodes: [], edges: [] },
-  },
-  score_delta: -15,
-  added: [],
-  removed: [],
-  changed: [{ before: bfFindings[1]!, after: cfFindings[1]!, reason: "Source IP is now treated as a verified corporate VPN, lowering the weight of the login-after-failures sequence." }],
-  explanation: "DEV FIXTURE: shape example only.",
-};
+export { bfOutcome, ambOutcome };
 
 // ---- Report ----
+export const ambiguousReport: ReportResponse = {
+  ...meta("rep2"),
+  case_id: "case_amb",
+  generated_by: "template_fallback",
+  summary: "One failed login for bob was followed by a successful login from 198.51.100.20. The available evidence is insufficient to call it malicious.",
+  verdict_rationale: "Only two events are in scope; post-login activity and IP context are missing.",
+  claims: [
+    { claim_id: "c1", text: "A failed login for bob occurred at 10:20.", citations: ["evt_0011"], verified: true, verification_note: null },
+    { claim_id: "c2", text: "A successful login followed at 10:21.", citations: ["evt_0012"], verified: true, verification_note: null },
+  ],
+  missing_information: ["Post-login activity", "IP context"],
+  citation_check: { total: 2, verified: 2, rejected: 0 },
+};
+
 export const bruteForceReport: ReportResponse = {
   ...meta("rep"),
   case_id: "case_bf",
@@ -205,6 +210,8 @@ export const bruteForceReport: ReportResponse = {
   missing_information: ["VPN gateway logs", "MFA challenge records"],
   citation_check: { total: 3, verified: 3, rejected: 0 },
 };
+
+export const reports: Record<string, ReportResponse> = { case_bf: bruteForceReport, case_amb: ambiguousReport };
 
 // ---- Adversarial (shape example; numbers are NOT measured results) ----
 export const adversarialExample: AdversarialResponse = {

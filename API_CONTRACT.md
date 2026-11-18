@@ -1,45 +1,43 @@
-# SOC Sentinel API Contract — PROPOSAL v1.0
+# SOC Sentinel API Contract v1.0
 
-**Status: proposed by Member 2 (frontend). Not yet confirmed by Member 1.**
-Source of truth for field-level shapes is `frontend/src/api/types.ts`. Source of scope: `docs/SOC_Sentinel_Revised_24_Hour_Build_Plan.docx` §9.
+**Status: decisions below CONFIRMED by Member 1. Field-level details marked ⚠ are still open.**
+Field shapes: `frontend/src/api/types.ts` (frontend's reading of the agreement). Scope source: `docs/SOC_Sentinel_Revised_24_Hour_Build_Plan.docx` §9.
 
-Please reply per item below with *agree / change to X*. Until confirmed, the frontend builds against mocks that conform to these shapes.
+## Conventions (confirmed)
 
-## Conventions
-
-- All responses are JSON and include `schema_version` (`"1.0"`) and `request_id`.
-- Errors: HTTP 4xx/5xx with `{ schema_version, request_id, error: { code, message, details? } }`.
-  Note: today's FastAPI default is `{ "detail": ... }`; a global exception handler is needed.
-- Timestamps are ISO-8601 UTC. IDs are opaque strings.
-- Three separate score outputs, never merged: `risk_score` (0–100 **heuristic, not a probability**), `confidence` (low/medium/high + rationale), `coverage` (ratio + present/missing telemetry).
-- Missing telemetry is reported as `missing`, never as benign.
-- Every finding/claim carries `event_ids` that resolve to `events[]` in the case. No orphan citations.
-- Containment is dry-run: `dry_run` is always `true`.
+- Every response includes `schema_version: "1.0"` and `request_id`.
+- Consistent error envelope; frontend currently assumes `{ schema_version, request_id, error: { code, message, details? } }` ⚠ (see open items).
+- Timestamps ISO-8601 UTC. Event IDs are deterministic and stable across reruns of identical datasets; every graph node, timeline entry and report citation uses source event IDs.
+- Risk score (0–100) is a **heuristic, never a probability**. Risk score, confidence and coverage are three separate outputs.
+- All containment is dry-run: `dry_run: true`. Nothing is blocked, disabled or isolated.
+- The frontend talks only to FastAPI (never to Supabase/Postgres directly). Dev: Vite `/api` proxy → `127.0.0.1:8000`. Deployed: `VITE_API_BASE_URL`.
 
 ## Endpoints
 
-| Endpoint | Request | Response |
-|---|---|---|
-| `POST /api/upload` | multipart `file` (CSV/JSON) | `UploadResponse`: dataset id, file SHA-256, counts, validation errors (quarantined rows), created `CaseSummary[]` |
-| `GET /api/cases` | — | `{ cases: CaseSummary[] }` |
-| `GET /api/cases/{id}` | — | `CaseDetail`: findings (supporting/contradicting), missing evidence, ATT&CK mappings, graph, source events with raw line, planner state, containment, decisions |
-| `GET /api/cases/{id}/report` | — | `ReportResponse`: claims with citations and per-claim verification, `generated_by` (`llm` or `template_fallback`) |
-| `POST /api/cases/{id}/counterfactual` | `{ overrides: [...] }` | original vs recomputed outcome, `score_delta`, added/removed/changed findings with reasons. Stored case unchanged |
-| `POST /api/cases/{id}/investigate` | `{ tool, params?, idempotency_key }` | retrieved real events, `budget_remaining`, `updated_case`, previous outcome |
-| `POST /api/adversarial/run` | `{ scenario_id, trials }` | scenario + payload, baseline vs hardened per-trial outputs, injection counts, citation check, model settings |
-| `POST /api/cases/{id}/decision` | `{ decision, analyst_id, note? }` | audit `DecisionRecord`, new `case_status` |
+| Endpoint | Notes (confirmed) |
+|---|---|
+| `POST /api/upload` | Frontend's ingestion path: ingest, normalize, detect, correlate, persist, create cases. Returns dataset ID + `CaseSummary[]`. `/api/analyze` is retained by backend for backward compatibility; **the frontend does not use it**. |
+| `GET /api/cases` | `CaseSummary[]`. One dataset may yield many cases; each summary carries `dataset_id`. |
+| `GET /api/cases/{id}` | `CaseDetail`: verdict, risk score, confidence + rationale, coverage, missing telemetry, findings (supporting/contradicting), ATT&CK mappings, related events, timeline, planner state, containment recommendation, analyst decisions. |
+| `GET /api/cases/{id}/report` | Claims cite **event IDs only**; every citation must resolve to an event in that case. |
+| `POST /api/cases/{id}/counterfactual` | **MVP supports only `exclude_event`** `{event_id, reason}`. Does not mutate the stored case. Frontend types cannot even express `verified_corporate_vpn`, `invalidate_ioc` or `verified_maintenance`; they will be added only when the backend supports them. |
+| `POST /api/cases/{id}/investigate` | Requires `idempotency_key`. Same key retried ⇒ no extra budget. Initial budget 3. Retrieves existing events only. Exhaustion ⇒ error code `INVESTIGATION_BUDGET_EXHAUSTED`. |
+| `POST /api/adversarial/run` | `scenario_id` ∈ `user_agent_injection`, `url_query_contamination`, `fake_analyst_authorization`. `trials` configurable, **max 10**. Returns baseline vs hardened outcomes, trial counts, citation verification, model settings. |
+| `POST /api/cases/{id}/decision` | `analyst_id` (free text) required and echoed in every record. |
 
-## Items needing Member 1's confirmation
+Enums: verdict `likely_malicious | needs_investigation | likely_benign | insufficient_evidence`; risk band `low | investigate | high`.
 
-1. **`/api/upload` vs existing `/api/analyze`.** Backend currently exposes `/api/analyze` returning `alerts`/`incidents`. Contract asks for `/api/upload` returning cases. Rename, add alongside, or change contract?
-2. **Case model.** Is an "incident" a "case"? Contract needs `verdict`, `confidence`, `coverage`, `missing_evidence`, `attack_mappings`, `graph`, and `events` (with `source_file`, `line_number`, `raw_text`) per case.
-3. **Verdict enum:** `likely_malicious | needs_investigation | likely_benign | insufficient_evidence`; risk bands `low | investigate | high`.
-4. **Event IDs** must be stable across reruns and counterfactuals so citations and graph nodes stay linkable.
-5. **Counterfactual overrides** (discriminated by `type`): `verified_corporate_vpn{ip}`, `invalidate_ioc{indicator}`, `exclude_event{event_id, reason}`, `verified_maintenance{host,start,end,reason}`. Are all four supported?
-6. **Planner state in `CaseDetail`:** `planner.candidates[]` with ranking heuristics + `recommended` + `reason`, and `budget_remaining` (initial 3). Alternatively a separate GET.
-7. **Investigate idempotency:** same `idempotency_key` must not spend budget twice. Out-of-budget error code?
-8. **Adversarial:** are `trials` caller-set (and capped)? Can the API return the scenario list, or are the three IDs fixed (`user_agent_injection`, `url_query_contamination`, `fake_analyst_authorization`)?
-9. **Citation resolution:** report claims cite `event_id`s only (frontend resolves to `events[]`).
-10. **Analyst identity:** is `analyst_id` free text for the demo?
-11. **Database:** PostgreSQL/Supabase (plan said SQLite). Does not affect the HTTP contract; frontend never touches DB credentials.
-12. **CORS / base URL** for the deployed backend (dev uses a Vite `/api` proxy to `:8000`).
+## Open field-level items ⚠ (please confirm or correct)
+
+1. **Error envelope + codes.** Exact JSON shape, HTTP status per code, and casing. `INVESTIGATION_BUDGET_EXHAUSTED` is upper-snake; the frontend assumes the same style for others (e.g. `CASE_NOT_FOUND`, `UNSUPPORTED_OVERRIDE`, `FILE_TOO_LARGE`). Need the full code list. FastAPI's default `{"detail": ...}` for 422/validation errors must be wrapped too. Assumed 409 for budget exhaustion.
+2. **`CaseDetail.timeline`.** Assumed `{event_id, timestamp, label}[]`. Is it derived from `events[]` or separate?
+3. **`CaseDetail.verdict_rationale`** (string) separate from `confidence.rationale`. Assumed; confirm names.
+4. **Supporting vs contradicting.** Assumed `findings[].stance` plus signed `weight`. Is contradicting evidence only expressed as findings, or also as raw events?
+5. **Graph.** Node `kind` (`user|ip|host|event`), `state` (`observed|inferred|missing`), edge `relation` vocabulary, and whether inferred/missing nodes have IDs stable across reruns. Are graph nodes for events keyed `event_id`?
+6. **Upload errors.** Codes/status for whole-file failures (bad type, >10 MB, empty, too many rows, wrong schema) vs row-level quarantine (`validation_errors[]` with `row_number`, `reason`). Are `total_records`, `valid_events`, `quarantined_records` the final names? Does upload create zero cases when nothing is detected?
+7. **Counterfactual details.** May `overrides[]` hold multiple `exclude_event` items? Does the response include recomputed `graph`? What if the event is not in the case (assumed 404)? Is the exclusion persisted anywhere, or purely ephemeral?
+8. **Planner.** `candidates[].params` shape per tool; whether `used` is reported; is the idempotency key scoped per case; what if the same key is reused with a different tool (assumed error)?
+9. **Decisions.** Can a case be decided more than once? Does `case_status` change (`open → approved|rejected`)? Is audit history ordered ascending?
+10. **Adversarial.** `settings` fields beyond model/temperature; whether runs are synchronous (10 trials may be slow: needs expected latency/timeout); how `injection_succeeded` is determined.
+11. **Report.** `generated_by` values (`llm | template_fallback`); are unverified/rejected claims returned (flagged) or removed?
+12. **Cases list.** Pagination/sort, or full list?

@@ -17,6 +17,14 @@ export type Verdict =
   | "insufficient_evidence";
 export type CaseStatus = "open" | "approved" | "rejected";
 
+/** Confirmed backend error codes the UI handles explicitly. */
+export const ERROR_CODES = {
+  BUDGET_EXHAUSTED: "INVESTIGATION_BUDGET_EXHAUSTED",
+} as const;
+
+/** Confirmed limit: adversarial trials per run. */
+export const MAX_ADVERSARIAL_TRIALS = 10;
+
 // ---------- Envelope ----------
 
 export interface Versioned {
@@ -166,6 +174,8 @@ export interface DecisionRecord {
 
 export interface CaseSummary {
   case_id: string;
+  /** A dataset can produce many cases; this preserves the case->dataset link. */
+  dataset_id: string;
   title: string;
   status: CaseStatus;
   verdict: Verdict;
@@ -177,9 +187,16 @@ export interface CaseSummary {
   last_seen: string;
 }
 
+export interface TimelineEntry {
+  event_id: string;
+  timestamp: string;
+  label: string;
+}
+
 export interface CaseDetail extends Versioned {
   summary: CaseSummary;
-  dataset_id: string;
+  /** Why the verdict was assigned (distinct from confidence.rationale). */
+  verdict_rationale: string;
   confidence: Confidence;
   coverage: Coverage;
   findings: Finding[];
@@ -187,6 +204,7 @@ export interface CaseDetail extends Versioned {
   attack_mappings: AttackMapping[];
   graph: Graph;
   events: SourceEvent[];
+  timeline: TimelineEntry[];
   planner: PlannerState;
   containment: ContainmentRecommendation | null;
   decisions: DecisionRecord[];
@@ -232,11 +250,12 @@ export interface ReportResponse extends Versioned {
 
 // ---------- POST /api/cases/{id}/counterfactual ----------
 
-export type CounterfactualOverride =
-  | { type: "verified_corporate_vpn"; ip: string }
-  | { type: "invalidate_ioc"; indicator: string }
-  | { type: "exclude_event"; event_id: string; reason: string }
-  | { type: "verified_maintenance"; host: string; start: string; end: string; reason: string };
+/**
+ * Confirmed MVP: ONLY exclude_event is supported by the backend.
+ * verified_corporate_vpn / invalidate_ioc / verified_maintenance are intentionally
+ * not representable until the backend supports them.
+ */
+export type CounterfactualOverride = { type: "exclude_event"; event_id: string; reason: string };
 
 export interface CounterfactualRequest {
   overrides: CounterfactualOverride[];
