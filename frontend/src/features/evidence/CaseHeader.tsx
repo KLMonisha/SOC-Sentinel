@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ArrowLeft, FileText } from "lucide-react";
+import { ArrowLeft, FileText, GitCompareArrows } from "lucide-react";
 import { VerdictLabel } from "@/components/ui/Badges";
 import { STATUS_LABEL } from "@/lib/format";
 import { reportPath } from "@/features/report/citations";
@@ -42,6 +42,9 @@ export function CaseHeader() {
           </Metric>
           <Metric label="Status">{STATUS_LABEL[s.status]}</Metric>
         </div>
+        <Link to={`/app/counterfactual/${encodeURIComponent(s.case_id)}`} className="inline-flex items-center gap-2 border border-line-strong px-3.5 py-2 text-[11px] uppercase tracking-[0.16em] text-ink-muted transition-colors hover:border-ink-muted hover:text-ink" title="Remove evidence and see how the verdict responds">
+          <GitCompareArrows size={13} aria-hidden /> Challenge
+        </Link>
         <Link to={reportPath(s.case_id)} className="inline-flex items-center gap-2 border border-verified/50 px-3.5 py-2 text-[11px] uppercase tracking-[0.16em] text-verified transition-colors hover:bg-verified/10">
           <FileText size={13} aria-hidden /> Report
         </Link>

@@ -66,3 +66,14 @@ The Evidence Room derives its graph in a replaceable adapter (`frontend/src/feat
 - `POST …/decision`: `analyst_id` required (trimmed); `note` optional (omitted when blank; open item 9 on whether a reason is required for reject). The UI asks for explicit confirmation, sends one request per confirmation, and never claims anything beyond "decision recorded, dry run".
 - **Repeated decisions** are not assumed impossible: the UI lets the analyst attempt another decision, shows every returned `decisions[]` record oldest first (sorted client-side by `decided_at`; open item 9 asks for server ordering), and surfaces any backend refusal as an error.
 - Approve/reject are disabled when `containment` is `null` (nothing to decide on).
+
+## Phase 7 frontend assumptions (Counterfactual Lab) ⚠ provisional
+
+- The lab sends exactly one `exclude_event` override with a trimmed, **required** `reason`. Open item 7 asks whether several overrides per request are supported.
+- `original` in the response must equal the **stored case outcome**. The UI compares it to the case it loaded and flags any mismatch; it also flags `score_delta` that differs from `recomputed.risk_score.value − original.risk_score.value`. It always displays the backend's values unmodified.
+- After a run the UI **re-reads `GET /api/cases/{id}`** and verifies verdict, risk, findings and event count are unchanged ("a counterfactual never mutates the case").
+- `CaseOutcome` carries no `coverage`. The UI shows the stored coverage for the original and **"not returned" for the recomputed side**; it never derives one. (If the backend can recompute coverage, add an optional `coverage` to `CaseOutcome`.)
+- `added`/`removed`/`changed` are keyed by stable `finding_id`. "No longer cited" / "newly cited" events are derived from the returned findings' `event_ids`, nothing else.
+- An unchanged verdict (and even an unchanged score) is a normal 200 result.
+- Error codes handled by name: `UNSUPPORTED_OVERRIDE`, `EVENT_NOT_FOUND` (upper-snake, as proposed in `BACKEND_INTEGRATION_REQUEST.md`).
+- The dev mock's recomputation is a labelled stand-in (a finding with 0–1 supporting events left is removed; 2+ keeps a proportionally smaller weight). It is **not** a model of the backend's rules.

@@ -51,7 +51,7 @@ Real `/api/analyze` and `/api/counterfactual` responses from the demo CSV (8 row
 | Evidence Room: graph, list, inspector, replay, focus, provenance | 🟡 🧪 | Functional and tested (mocked renderer); **visual composition predates the redesign** (nested panels, small labels). Browser-verified earlier only at one width. |
 | Report page + citation navigation | ✅ 🧪 | Milestone B. Browser-verified against the mock only. |
 | Analyst decision + audit history | ✅ 🧪 | Milestone B. Report page + Evidence Room "Decision" tab. Mock only (the mock keeps decisions in page memory, so a full reload resets them). |
-| Counterfactual Lab | ❌ | `Placeholder`. Client + mock exist. |
+| Counterfactual Lab | ✅ 🧪 | Milestone C. Branch composition, validation, changed/unchanged verdicts, failures, integrity re-check. **Mock only.** No adapter to the real stateless `/api/counterfactual` by decision: waits for stable cases and events. |
 | Investigation Lab (planner) | ❌ | `Placeholder`. Client + mock exist. |
 | Red Team Lab | ❌ | `Placeholder`. Client + mock exist. |
 | End-to-end journeys A–E | ❌ | Journey A partial (upload → queue → evidence), mock only. |
@@ -62,8 +62,8 @@ Real `/api/analyze` and `/api/counterfactual` responses from the demo CSV (8 row
 | Tests | ✅ | 125 passing at start of this phase. |
 
 ## 3. Completion estimate (Member 2 scope, honest)
-- **Overall: ≈ 50% after Milestone B.** Foundation, landing, shell, Command Center and the Evidence Room core exist; four product screens, the decision/report flows, journeys and demo are not built.
-- **Real-backend integration: ≈ 0%** for the agreed contract (2 operations partially overlap in intent).
+- **Overall: ≈ 60% after Milestone C (frontend complete for Counterfactual, mock-tested only).** Foundation, landing, shell, Command Center and the Evidence Room core exist; four product screens, the decision/report flows, journeys and demo are not built.
+- **Real-backend integration: 0%.** No agreed endpoint has been exercised successfully against the real backend. This number only moves when one has.
 
 ## 4. Working agreement for this phase
 - Build the remaining screens against the agreed contract and mocks; **label every result as a development fixture** when mocks are on.

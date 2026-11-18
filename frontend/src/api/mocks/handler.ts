@@ -66,22 +66,38 @@ function counterfactual(c: CaseDetail, req: CounterfactualRequest): MockResult {
   const excluded = new Set(overrides.map((o) => o.event_id));
   const known = new Set(c.events.map((e) => e.event_id));
   for (const id of excluded) {
-    if (!known.has(id)) return err(404, "event_not_found", `Event ${id} does not belong to case ${c.summary.case_id}.`);
+    if (!known.has(id)) return err(404, "EVENT_NOT_FOUND", `Event ${id} does not belong to case ${c.summary.case_id}.`);
   }
+  // DEV MOCK stand-in for the backend rerun. A finding with no events left is removed; one that keeps at least
+  // two supporting events is kept with a proportionally smaller weight; otherwise it no longer holds.
   const keep: Finding[] = [];
   const removed: CounterfactualResponse["removed"] = [];
+  const changed: CounterfactualResponse["changed"] = [];
   for (const f of c.findings) {
     const hit = f.event_ids.filter((id) => excluded.has(id));
-    if (hit.length) removed.push({ finding: f, reason: `Supporting event ${hit.join(", ")} was excluded, so this finding no longer holds.` });
-    else keep.push(f);
+    if (!hit.length) { keep.push(f); continue; }
+    const remaining = f.event_ids.filter((id) => !excluded.has(id));
+    if (remaining.length >= 2) {
+      const after: Finding = {
+        ...f,
+        weight: Math.sign(f.weight) * Math.round((Math.abs(f.weight) * remaining.length) / f.event_ids.length),
+        event_ids: remaining,
+        description: `${f.description} (DEV MOCK: ${remaining.length} of ${f.event_ids.length} supporting events remain.)`,
+      };
+      changed.push({ before: f, after, reason: `Supporting event ${hit.join(", ")} was excluded; ${remaining.length} of ${f.event_ids.length} remain.` });
+      keep.push(after);
+    } else {
+      removed.push({ finding: f, reason: `Supporting event ${hit.join(", ")} was excluded, so this finding no longer holds.` });
+    }
   }
   const value = Math.max(0, Math.min(100, keep.reduce((n, f) => n + f.weight, 0)));
   const b = band(value);
+  const supportingLeft = keep.filter((f) => f.stance === "supporting").length;
   const original = outcomeOf(c);
   const recomputed: CaseOutcome = {
     verdict: keep.length === 0 ? "insufficient_evidence" : verdictFor(b),
     risk_score: { value, band: b, reasoning: [`DEV MOCK: ${keep.length} finding(s) remain after exclusion`] },
-    confidence: { level: "low", rationale: "DEV MOCK confidence." },
+    confidence: { level: supportingLeft >= 3 ? "medium" : "low", rationale: `DEV MOCK confidence: ${supportingLeft} supporting finding(s) remain.` },
     findings: keep,
     graph: c.graph,
   };
@@ -93,7 +109,7 @@ function counterfactual(c: CaseDetail, req: CounterfactualRequest): MockResult {
     score_delta: value - original.risk_score.value,
     added: [],
     removed,
-    changed: [],
+    changed,
     explanation: "DEV MOCK: simplified stand-in for the backend's real rerun of detection, correlation and scoring.",
   };
   return { status: 200, data };

@@ -4,6 +4,8 @@ import { LandingHost } from "./transition/LandingHost";
 import { TransitionProvider } from "./transition/TransitionProvider";
 import { CommandCenter } from "@/pages/CommandCenter";
 import { EvidenceRoom, EvidenceRoomIndex } from "@/pages/EvidenceRoom";
+import { CounterfactualIndex } from "@/pages/CounterfactualIndex";
+import { CounterfactualLab } from "@/pages/CounterfactualLab";
 import { Placeholder } from "@/pages/Placeholder";
 import { ReportPage } from "@/pages/ReportPage";
 
@@ -25,7 +27,8 @@ export function App() {
           <Route path="evidence" element={<EvidenceRoomIndex />} />
           <Route path="evidence/:caseId" element={<EvidenceRoom />} />
           <Route path="evidence/:caseId/report" element={<ReportPage />} />
-          <Route path="counterfactual" element={<Placeholder title="Counterfactual Investigation Lab" phase="Phase 7" />} />
+          <Route path="counterfactual" element={<CounterfactualIndex />} />
+          <Route path="counterfactual/:caseId" element={<CounterfactualLab />} />
           <Route path="investigate" element={<Placeholder title="Investigation Lab" phase="Phase 8" />} />
           <Route path="red-team" element={<Placeholder title="Red Team Lab" phase="Phase 9" />} />
         </Route>

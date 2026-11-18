@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import type { ReactNode } from "react";
 import { AlertTriangle } from "lucide-react";
 import type { SourceEvent } from "@/api/types";
@@ -44,6 +45,11 @@ function SourceEventView({ event }: { event: SourceEvent }) {
         <h3 className="font-mono text-sm">{event.event_id}</h3>
         <EvidenceBadge state="observed" />
       </div>
+      <p className="mb-3 text-[12px]">
+        <Link to={`/app/counterfactual/${encodeURIComponent(caseDetail.summary.case_id)}?event=${encodeURIComponent(event.event_id)}`} className="text-verified underline-offset-2 hover:underline">
+          What if this event were excluded? →
+        </Link>
+      </p>
       <Section title="Original log record (untrusted text)">
         {/* Rendered as inert text; never interpreted as HTML. */}
         <pre data-testid="raw-log" className="max-h-40 overflow-auto whitespace-pre-wrap break-all border border-line bg-bg p-2.5 font-mono text-[12px] leading-relaxed">
