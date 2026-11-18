@@ -76,3 +76,20 @@ Real `/api/analyze` and `/api/counterfactual` responses from the demo CSV (8 row
 3. Add `GET …/report` (validated citations; deterministic fallback) and `POST …/decision` (`analyst_id`, optional note; dry-run only; return the audit record).
 4. Add the planner (`investigate`, idempotency key, budget 3) and `adversarial/run` (trials ≤ 10).
 5. Confirm open contract items 1–12 in `API_CONTRACT.md`.
+
+## 6. Scheduled frontend backlog: exports (Phase 6, deferred by decision on 2026-11-19)
+
+Not started. To be done with the reporting / Evidence Room refinement work (Milestone F), not during Milestone C.
+
+| Export | Notes |
+|---|---|
+| Downloadable forensic investigation PDF | Mirrors the report page: summary, verdict (separate risk/confidence/coverage), evidence with citations, missing telemetry, ATT&CK, chronology with source-file:line provenance, containment with the dry-run statement, decision audit. |
+| Evidence and findings CSV | One CSV for events (with provenance and `raw_hash`) and one for findings. **Must neutralise CSV formula injection** (any cell starting with `=`, `+`, `-`, `@`, tab or CR is prefixed/escaped; all fields quoted) because log content is untrusted. |
+| High-resolution Evidence Constellation PNG | Rendered from the same normalized graph (observed/inferred/missing visibly distinct). SVG optional; if produced, all text must be escaped (no markup or scripts from log content). |
+| Future combined ZIP case package | `manifest.json` (case id, dataset id, `exported_at`, `data_source`, file list) plus SHA-256 checksums of every file. |
+
+Cross-cutting requirements for every export:
+- Preserve source provenance (event id, `source_file`, `line_number`, `raw_hash`).
+- State the data source explicitly: **mock exports are watermarked "DEVELOPMENT FIXTURE" and carry `data_source: "mock"` in the manifest**; live exports carry `data_source: "live"`.
+- Treat all log-derived text as untrusted (escaping, safe filenames, no formula/markup injection).
+- Never present a recomputed counterfactual as the stored case outcome.
