@@ -1,0 +1,68 @@
+/** Single shared state for selection, replay and view. 2D, list and (future) 3D all read this. */
+
+export type Selection = { kind: "node" | "edge"; id: string };
+export type CenterView = "graph" | "list";
+export type SidePanel = "inspector" | "analysis";
+
+export interface InvState {
+  /** Total number of events in the case. */
+  total: number;
+  /** Number of chronologically-ordered events revealed. `total` means the full investigation. */
+  replay: number;
+  playing: boolean;
+  selection: Selection | null;
+  view: CenterView;
+  panel: SidePanel;
+}
+
+export type InvAction =
+  | { type: "select"; selection: Selection }
+  | { type: "clear" }
+  | { type: "setReplay"; value: number }
+  | { type: "step"; delta: 1 | -1 }
+  | { type: "tick" }
+  | { type: "reset" }
+  | { type: "showAll" }
+  | { type: "play" }
+  | { type: "pause" }
+  | { type: "setView"; view: CenterView }
+  | { type: "setPanel"; panel: SidePanel };
+
+export const initialState = (total: number): InvState => ({
+  total, replay: total, playing: false, selection: null, view: "graph", panel: "analysis",
+});
+
+const clamp = (n: number, total: number) => Math.max(0, Math.min(total, Math.trunc(n)));
+
+export function investigationReducer(s: InvState, a: InvAction): InvState {
+  switch (a.type) {
+    case "select":
+      if (s.selection?.kind === a.selection.kind && s.selection.id === a.selection.id && s.panel === "inspector") return s;
+      return { ...s, selection: a.selection, panel: "inspector" };
+    case "clear":
+      return s.selection ? { ...s, selection: null } : s;
+    case "setReplay":
+      return { ...s, replay: clamp(a.value, s.total), playing: false };
+    case "step": {
+      const replay = clamp(s.replay + a.delta, s.total);
+      return { ...s, replay, playing: false };
+    }
+    case "tick": {
+      const replay = clamp(s.replay + 1, s.total);
+      return { ...s, replay, playing: replay < s.total };
+    }
+    case "reset":
+      return { ...s, replay: 0, playing: false };
+    case "showAll":
+      return { ...s, replay: s.total, playing: false };
+    case "play":
+      if (s.total === 0) return s;
+      return { ...s, replay: s.replay >= s.total ? 0 : s.replay, playing: true };
+    case "pause":
+      return s.playing ? { ...s, playing: false } : s;
+    case "setView":
+      return { ...s, view: a.view };
+    case "setPanel":
+      return { ...s, panel: a.panel };
+  }
+}

@@ -47,6 +47,8 @@ const bfEvents: SourceEvent[] = [
   ev(4, 3, "authentication_failure", "failure"),
   ev(5, 4, "authentication_failure", "failure"),
   ev(6, 5, "authentication_success", "success"),
+  // Same timestamp as evt_0007 on purpose: exercises stable secondary ordering.
+  ev(8, 7, "authentication_success", "success", { source_ip: "10.0.0.15", raw_text: "2026-11-18T10:07:00Z,alice,10.0.0.15,success_login,server-01" }),
   ev(7, 7, "web_access", "success", { resource: "/admin/export", raw_text: `2026-11-18T10:07:00Z,alice,${IP},GET /admin/export 200,web-01`, host: "web-01", source_file: "web_logs.json" }),
 ];
 
@@ -54,11 +56,12 @@ const bfFindings: Finding[] = [
   { finding_id: "f_bf", rule_id: "DET-001", title: "Repeated login failures", description: "5 failed logins for alice from 203.0.113.45 within 5 minutes.", severity: "high", stance: "supporting", weight: 25, event_ids: ["evt_0001", "evt_0002", "evt_0003", "evt_0004", "evt_0005"] },
   { finding_id: "f_sa", rule_id: "DET-002", title: "Success after repeated failures", description: "Successful login followed 5 failures from the same IP.", severity: "critical", stance: "supporting", weight: 25, event_ids: ["evt_0005", "evt_0006"] },
   { finding_id: "f_pl", rule_id: "DET-005", title: "Sensitive endpoint after login", description: "Access to /admin/export 2 minutes after the successful login.", severity: "high", stance: "supporting", weight: 25, event_ids: ["evt_0006", "evt_0007"] },
+  { finding_id: "f_in", rule_id: "CTX-001", title: "Concurrent login from an internal address", description: "alice also authenticated from 10.0.0.15 at 10:07, consistent with a legitimate user (or a second session). DEV FIXTURE.", severity: "low", stance: "contradicting", weight: -5, event_ids: ["evt_0008"] },
 ];
 
 const bfOutcome: CaseOutcome = {
   verdict: "likely_malicious",
-  risk_score: { value: 75, band: "high", reasoning: ["+25 repeated failures", "+25 success after failures", "+25 sensitive endpoint after login"] },
+  risk_score: { value: 70, band: "high", reasoning: ["+25 repeated failures", "+25 success after failures", "+25 sensitive endpoint after login", "-5 concurrent internal login"] },
   confidence: { level: "medium", rationale: "Three independent rules agree; no IP reputation or VPN context available." },
   findings: bfFindings,
   graph: { nodes: [], edges: [] },
@@ -107,6 +110,7 @@ export const bruteForceCase: CaseDetail = {
       { id: "e2", source: "ip_1", target: "h_s1", relation: "connected_to", state: "observed", event_ids: ["evt_0005"] },
       { id: "e3", source: "u_alice", target: "h_w1", relation: "accessed", state: "observed", event_ids: ["evt_0007"] },
       { id: "e4", source: "ip_1", target: "n_vpn", relation: "may_be", state: "missing", event_ids: [] },
+      { id: "e5", source: "ip_1", target: "h_w1", relation: "likely_same_session", state: "inferred", event_ids: ["evt_0006", "evt_0007"] },
     ],
   },
   events: bfEvents,

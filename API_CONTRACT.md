@@ -41,3 +41,17 @@ Enums: verdict `likely_malicious | needs_investigation | likely_benign | insuffi
 10. **Adversarial.** `settings` fields beyond model/temperature; whether runs are synchronous (10 trials may be slow: needs expected latency/timeout); how `injection_succeeded` is determined.
 11. **Report.** `generated_by` values (`llm | template_fallback`); are unverified/rejected claims returned (flagged) or removed?
 12. **Cases list.** Pagination/sort, or full list?
+
+## Phase 5 frontend assumptions (Evidence Room) ⚠ provisional, awaiting Member 1
+
+The Evidence Room derives its graph in a replaceable adapter (`frontend/src/features/evidence/model/graphModel.ts`) from existing `CaseDetail` fields. No new backend fields were added.
+
+- **Observed edges are derived, not taken from `graph`.** For each `events[]` item the UI draws `event → user` (`username`), `event → ip` (`source_ip`), `event → host` (`host`), and `finding → event` for every `findings[].event_ids` entry. Each edge's inspector text names the exact field and `source_file:line_number`. Entities are never linked to each other directly and nothing is linked by time proximity.
+- **`graph` is used only for non-observed items.** Backend `graph.nodes/edges` with `state` of `inferred` or `missing` are rendered (dashed/dotted, labelled). Backend `observed` nodes/edges are ignored. Inferred/missing edges must reference real `event_ids` (or an empty list for a missing link) and endpoints that resolve; otherwise they are dropped and a warning is shown. **Open question #5 (graph vocabulary) therefore now only concerns inferred/missing items.**
+- **Stable view IDs:** `user:<username>`, `ip:<address>`, `host:<host>`, `event:<event_id>`, `finding:<finding_id>`, `missing:<missing_id>`, `ext:<backend node id>`. Backend inferred/missing node ids must be stable across reruns for selection to survive a refetch.
+- **Replay order** is `timestamp`, then `source_file`, `line_number`, `event_id`. The UI relies on `line_number` being unique per file.
+- **Timeline** is rendered from `events[]`; `CaseDetail.timeline` is currently unused (open question #2 stands: confirm whether it is needed).
+- **Contradicting evidence** is shown from `findings[].stance === "contradicting"`. If the backend wants raw contradicting events without a finding, it needs a field for them (open question #4).
+- **Unresolved citations:** any `event_id` (finding, ATT&CK mapping, edge) that is not in `events[]` is displayed as "unresolved", never hidden. Every citation must resolve (confirmed item 9).
+- **Fields not in the contract are not displayed:** destination IP and any per-event dataset ID are not shown. If wanted, they must be added to `SourceEvent`.
+- Replay shows a note that verdict/risk/confidence are for the full investigation, because the backend provides no historical (as-of) verdicts.

@@ -44,3 +44,11 @@
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* React Flow chrome, themed to the forensic palette. */
+.react-flow__controls { box-shadow: none; border: 1px solid var(--color-line-strong); }
+.react-flow__controls-button { background: var(--color-surface-2); border-bottom: 1px solid var(--color-line); fill: var(--color-ink-muted); color: var(--color-ink-muted); }
+.react-flow__controls-button:hover { background: var(--color-surface-3); }
+.react-flow__controls-button svg { fill: currentColor; }
+.react-flow__node { cursor: pointer; }
+.react-flow__edge-text { font-family: var(--font-mono); }
