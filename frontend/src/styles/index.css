@@ -1,0 +1,46 @@
+@import "tailwindcss";
+@import "@fontsource/ibm-plex-sans/400.css";
+@import "@fontsource/ibm-plex-sans/500.css";
+@import "@fontsource/ibm-plex-sans/600.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+
+/* Design tokens. Evidence state is encoded by colour AND icon/label/border style, never colour alone. */
+@theme {
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  --color-bg: #0b111b;
+  --color-surface: #101b29;
+  --color-surface-2: #152434;
+  --color-surface-3: #1c3045;
+  --color-line: #243a50;
+  --color-line-strong: #33516c;
+
+  --color-ink: #e6ebf1;
+  --color-ink-muted: #9db0c3;
+  --color-ink-faint: #6b8197;
+
+  --color-verified: #55d6c2;   /* observed / supporting */
+  --color-suspicious: #e8a15d; /* inferred / suspicious */
+  --color-critical: #c75d65;   /* critical finding */
+  --color-missing: #8a9bb0;    /* missing telemetry (dashed) */
+  --color-focus: #7cc4ff;
+}
+
+@layer base {
+  html, body, #root { height: 100%; }
+  body {
+    background: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+  ::selection { background: #33516c; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
