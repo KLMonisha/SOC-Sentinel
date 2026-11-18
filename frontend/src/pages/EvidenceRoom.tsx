@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { motion, useReducedMotion } from "motion/react";
 import { Link, useParams } from "react-router-dom";
 import { ApiError, api } from "@/api/client";
 import type { CaseDetail } from "@/api/types";
@@ -19,8 +20,9 @@ const tab = (active: boolean) =>
 
 function Workspace() {
   const { state, dispatch, graph, layout, highlight, fullGraph, selectNode } = useInvestigation();
+  const reduce = useReducedMotion();
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_400px]">
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
       <div className="min-w-0 space-y-4">
         <Panel
           title="Evidence constellation"
@@ -31,11 +33,6 @@ function Workspace() {
             </span>
           }
         >
-          <div className="mb-2 flex flex-wrap gap-3 text-[11px] text-ink-muted" aria-label="Legend">
-            <span className="text-verified">━ observed (derived from a source log field)</span>
-            <span className="text-suspicious">┄ inferred (a hypothesis)</span>
-            <span className="text-missing">╌ missing (no telemetry)</span>
-          </div>
           {fullGraph.warnings.length > 0 && (
             <ul role="status" className="mb-2 text-[11px] text-suspicious">
               {fullGraph.warnings.map((w) => <li key={w}>{w}</li>)}
@@ -55,13 +52,18 @@ function Workspace() {
         <Timeline />
       </div>
 
-      <aside aria-label="Investigation details" className="min-w-0 border border-line bg-surface">
+      <aside aria-label="Investigation details" className="min-w-0 self-start xl:sticky xl:top-4 border border-line bg-surface">
         <div role="tablist" aria-label="Details" className="flex border-b border-line px-2">
           <button role="tab" aria-selected={state.panel === "analysis"} className={tab(state.panel === "analysis")} onClick={() => dispatch({ type: "setPanel", panel: "analysis" })}>Analysis</button>
           <button role="tab" aria-selected={state.panel === "inspector"} className={tab(state.panel === "inspector")} onClick={() => dispatch({ type: "setPanel", panel: "inspector" })}>Inspector</button>
         </div>
-        <div className="max-h-[calc(100vh-220px)] overflow-auto p-4">
-          {state.panel === "analysis" ? <AnalysisPanel /> : <Inspector />}
+        <div className="max-h-[calc(100vh-180px)] overflow-auto p-4">
+          <motion.div
+            key={state.panel === "inspector" ? `i:${state.selection?.id ?? ""}` : "a"}
+            initial={reduce ? false : { opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}
+          >
+            {state.panel === "analysis" ? <AnalysisPanel /> : <Inspector />}
+          </motion.div>
         </div>
       </aside>
     </div>
@@ -108,7 +110,7 @@ export function EvidenceRoom() {
   return (
     // key: a different case resets replay and selection.
     <InvestigationProvider key={load.data.summary.case_id} caseDetail={load.data}>
-      <div className="mx-auto max-w-[1500px] space-y-4">
+      <div className="mx-auto max-w-[1680px] space-y-4">
         <CaseHeader />
         {load.data.events.length === 0 ? (
           <EmptyState title="No source events" detail="This case has no stored source events to explore." />

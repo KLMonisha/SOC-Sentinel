@@ -44,3 +44,25 @@ describe("investigationReducer", () => {
     expect(s).toMatchObject({ replay: 3, playing: false });
   });
 });
+
+describe("focus, follow and selection cause", () => {
+  const sel = { kind: "node", id: "event:e1" } as const;
+  test("focus requires a selection and is cleared with it", () => {
+    expect(r(initialState(3), { type: "setFocus", focus: true }).focus).toBe(false);
+    let s = run(initialState(3), { type: "select", selection: sel }, { type: "setFocus", focus: true });
+    expect(s.focus).toBe(true);
+    s = r(s, { type: "clear" });
+    expect(s).toMatchObject({ focus: false, selection: null });
+  });
+  test("focus keeps the selection stable and does not touch replay", () => {
+    const s = run(initialState(3), { type: "select", selection: sel }, { type: "setFocus", focus: true });
+    expect(s.selection).toEqual(sel);
+    expect(s.replay).toBe(3);
+  });
+  test("follow defaults on and toggles; selection records its cause", () => {
+    expect(initialState(2).follow).toBe(true);
+    expect(r(initialState(2), { type: "setFollow", follow: false }).follow).toBe(false);
+    expect(r(initialState(2), { type: "select", selection: sel }).cause).toBe("user");
+    expect(r(initialState(2), { type: "select", selection: sel, cause: "replay" }).cause).toBe("replay");
+  });
+});

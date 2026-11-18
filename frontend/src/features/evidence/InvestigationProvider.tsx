@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useReducer, type Dispatch, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useReducer, useRef, type Dispatch, type ReactNode } from "react";
 import type { CaseDetail, SourceEvent } from "@/api/types";
 import {
   buildGraph, eventIdOfNode, ids, neighborhood, orderEvents, visibleGraph,
@@ -19,6 +19,8 @@ export interface InvestigationContextValue {
   graph: NormGraph; // visible at the current replay position
   layout: Record<string, Point>;
   visibleEventIds: Set<string>;
+  /** The most recently revealed event while a replay is in progress, else null. */
+  activeEventId: string | null;
   highlight: Highlight | null;
   selectEvent: (eventId: string) => void;
   selectNode: (nodeId: string) => void;
@@ -56,6 +58,19 @@ export function InvestigationProvider({ caseDetail, children }: { caseDetail: Ca
     return () => clearInterval(t);
   }, [state.playing]);
 
+  // Replay reconstructs the incident: stepping forward one event selects it, so the inspector and camera follow.
+  const prevReplay = useRef(state.replay);
+  useEffect(() => {
+    const prev = prevReplay.current;
+    prevReplay.current = state.replay;
+    if (state.replay === prev + 1) {
+      const ev = orderedEvents[state.replay - 1];
+      if (ev) dispatch({ type: "select", selection: { kind: "node", id: ids.event(ev.event_id) }, cause: "replay" });
+    }
+  }, [state.replay, orderedEvents]);
+  const activeEventId =
+    state.replay > 0 && (state.replay < state.total || state.playing) ? (orderedEvents[state.replay - 1]?.event_id ?? null) : null;
+
   // If replay moves back past the selected evidence, drop the selection rather than show a "future" item.
   useEffect(() => {
     const sel = state.selection;
@@ -67,7 +82,7 @@ export function InvestigationProvider({ caseDetail, children }: { caseDetail: Ca
 
   const value = useMemo<InvestigationContextValue>(
     () => ({
-      caseDetail, state, dispatch, orderedEvents, eventsById, fullGraph, graph, layout, visibleEventIds, highlight,
+      caseDetail, state, dispatch, orderedEvents, eventsById, fullGraph, graph, layout, visibleEventIds, activeEventId, highlight,
       // Event ids that do not resolve still become a selection so the inspector can say so explicitly.
       selectEvent: (eventId) => dispatch({ type: "select", selection: { kind: "node", id: ids.event(eventId) } }),
       selectNode: (nodeId) => {
@@ -75,7 +90,7 @@ export function InvestigationProvider({ caseDetail, children }: { caseDetail: Ca
         dispatch({ type: "select", selection: { kind: "node", id: evId ? ids.event(evId) : nodeId } });
       },
     }),
-    [caseDetail, state, orderedEvents, eventsById, fullGraph, graph, layout, visibleEventIds, highlight],
+    [caseDetail, state, orderedEvents, eventsById, fullGraph, graph, layout, visibleEventIds, activeEventId, highlight],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
