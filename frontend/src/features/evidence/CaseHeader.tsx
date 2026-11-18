@@ -20,7 +20,7 @@ export function CaseHeader() {
   return (
     <header className="border border-line bg-surface">
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
-        <Link to="/" className="inline-flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink">
+        <Link to="/app" className="inline-flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink">
           <ArrowLeft size={13} aria-hidden /> Command Center
         </Link>
         <div className="min-w-0 flex-1">

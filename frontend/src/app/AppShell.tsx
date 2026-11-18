@@ -3,11 +3,11 @@ import { Radar, FolderSearch, GitCompareArrows, Crosshair, ShieldAlert } from "l
 import { config } from "@/lib/config";
 
 const NAV = [
-  { to: "/", label: "Command Center", Icon: Radar, end: true },
-  { to: "/evidence", label: "Evidence Room", Icon: FolderSearch, end: false },
-  { to: "/counterfactual", label: "Counterfactual Lab", Icon: GitCompareArrows, end: false },
-  { to: "/investigate", label: "Investigation Lab", Icon: Crosshair, end: false },
-  { to: "/red-team", label: "Red Team Lab", Icon: ShieldAlert, end: false },
+  { to: "/app", label: "Command Center", Icon: Radar, end: true },
+  { to: "/app/evidence", label: "Evidence Room", Icon: FolderSearch, end: false },
+  { to: "/app/counterfactual", label: "Counterfactual Lab", Icon: GitCompareArrows, end: false },
+  { to: "/app/investigate", label: "Investigation Lab", Icon: Crosshair, end: false },
+  { to: "/app/red-team", label: "Red Team Lab", Icon: ShieldAlert, end: false },
 ];
 
 export function AppShell() {

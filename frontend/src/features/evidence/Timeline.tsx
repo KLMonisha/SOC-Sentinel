@@ -42,7 +42,7 @@ export function Timeline() {
               type="range" min={0} max={total} value={replay} aria-label="Replay position"
               aria-valuetext={`${replay} of ${total} events`}
               onChange={(e) => dispatch({ type: "setReplay", value: Number(e.target.value) })}
-              className="min-w-40 flex-1 accent-[#55d6c2]"
+              className="min-w-40 flex-1 accent-[#63ebd8]"
             />
           </div>
 

@@ -97,7 +97,7 @@ export function CaseQueue({ state, onRetry }: { state: QueueState; onRetry: () =
                   {visible.map((c) => (
                     <tr key={c.case_id} className="border-b border-line/60 hover:bg-surface-2">
                       <td className="py-2.5 pr-3">
-                        <Link to={`/evidence/${encodeURIComponent(c.case_id)}`} className="text-ink underline-offset-2 hover:underline">
+                        <Link to={`/app/evidence/${encodeURIComponent(c.case_id)}`} className="text-ink underline-offset-2 hover:underline">
                           {c.title}
                         </Link>
                         <div className="font-mono text-[11px] text-ink-faint">

@@ -101,7 +101,7 @@ export function EvidenceRoom() {
           {requestId && <span className="ml-2 font-mono text-xs text-ink-faint">request {requestId}</span>}</p>
         <div className="mt-3 flex gap-2">
           <button onClick={() => void fetchCase()} className="border border-line-strong bg-surface-2 px-3 py-1.5 hover:bg-surface-3">Retry</button>
-          <Link to="/" className="border border-line-strong px-3 py-1.5 hover:bg-surface-2">Back to Command Center</Link>
+          <Link to="/app" className="border border-line-strong px-3 py-1.5 hover:bg-surface-2">Back to Command Center</Link>
         </div>
       </div>
     );
@@ -126,7 +126,7 @@ export function EvidenceRoomIndex() {
   return (
     <div className="mx-auto max-w-xl">
       <EmptyState title="No case selected" detail="Open a case from the Command Center queue to enter its Evidence Room." />
-      <p className="mt-3 text-center"><Link to="/" className="text-[13px] underline underline-offset-2">Go to Command Center</Link></p>
+      <p className="mt-3 text-center"><Link to="/app" className="text-[13px] underline underline-offset-2">Go to Command Center</Link></p>
     </div>
   );
 }

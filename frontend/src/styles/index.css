@@ -4,28 +4,32 @@
 @import "@fontsource/ibm-plex-sans/600.css";
 @import "@fontsource/ibm-plex-mono/400.css";
 @import "@fontsource/ibm-plex-mono/500.css";
+@import "@fontsource/michroma/400.css";
 
 /* Design tokens. Evidence state is encoded by colour AND icon/label/border style, never colour alone. */
 @theme {
   --font-sans: "IBM Plex Sans", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --font-display: "Michroma", "IBM Plex Sans", system-ui, sans-serif;
 
-  --color-bg: #0b111b;
-  --color-surface: #101b29;
-  --color-surface-2: #152434;
-  --color-surface-3: #1c3045;
-  --color-line: #243a50;
-  --color-line-strong: #33516c;
+  /* Mineral-green black. Mint is a light source, not a paint colour: use it for focal points only. */
+  --color-void: #030807;
+  --color-bg: #050b0a;
+  --color-surface: #09130f;
+  --color-surface-2: #0e1a16;
+  --color-surface-3: #14231e;
+  --color-line: #1a2e28;
+  --color-line-strong: #2a4a41;
 
-  --color-ink: #e6ebf1;
-  --color-ink-muted: #9db0c3;
-  --color-ink-faint: #6b8197;
+  --color-ink: #e9efed;
+  --color-ink-muted: #9bb0aa;
+  --color-ink-faint: #6b827b;
 
-  --color-verified: #55d6c2;   /* observed / supporting */
-  --color-suspicious: #e8a15d; /* inferred / suspicious */
-  --color-critical: #c75d65;   /* critical finding */
-  --color-missing: #8a9bb0;    /* missing telemetry (dashed) */
-  --color-focus: #7cc4ff;
+  --color-verified: #63ebd8;   /* observed / corroborated / focal accent */
+  --color-suspicious: #e8a15d; /* uncertainty and inferred evidence ONLY */
+  --color-critical: #d6595f;   /* confirmed critical only */
+  --color-missing: #8fa39d;    /* missing telemetry (dashed) */
+  --color-focus: #8ff3e4;
 }
 
 @layer base {
@@ -38,7 +42,7 @@
     -webkit-font-smoothing: antialiased;
   }
   :focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
-  ::selection { background: #33516c; }
+  ::selection { background: #2a4a41; }
 }
 
 @media (prefers-reduced-motion: reduce) {

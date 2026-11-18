@@ -36,7 +36,7 @@ const mount = (id = "case_bf") =>
     <MemoryRouter initialEntries={[`/evidence/${id}`]}>
       <Routes>
         <Route path="/evidence/:caseId" element={<EvidenceRoom />} />
-        <Route path="/" element={<p>Command Center page</p>} />
+        <Route path="/app" element={<p>Command Center page</p>} />
       </Routes>
     </MemoryRouter>,
   );

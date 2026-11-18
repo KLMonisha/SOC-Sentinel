@@ -19,7 +19,7 @@ const clock = (iso: string) => {
   return Number.isNaN(d.getTime()) ? iso : d.toISOString().slice(11, 19);
 };
 
-const STROKE: Record<EvidenceState, string> = { observed: "#55d6c2", inferred: "#e8a15d", missing: "#8a9bb0" };
+const STROKE: Record<EvidenceState, string> = { observed: "#63ebd8", inferred: "#e8a15d", missing: "#8fa39d" };
 const DASH: Record<EvidenceState, string | undefined> = { observed: undefined, inferred: "2 3", missing: "5 4" };
 
 interface NodeData extends Record<string, unknown> {
@@ -43,12 +43,12 @@ function Silhouette({ d, selected }: { d: NodeData; selected: boolean }) {
   const { w, h } = SHAPE[d.kind];
   const stroke = STROKE[d.state];
   const sw = selected ? 2.5 : 1.5;
-  const common = { fill: "#152434", stroke, strokeWidth: sw, strokeDasharray: DASH[d.state] } as const;
+  const common = { fill: "#0e1a16", stroke, strokeWidth: sw, strokeDasharray: DASH[d.state] } as const;
   switch (d.kind) {
     case "user":
       return (
         <svg width={w} height={h} aria-hidden>
-          {d.anchor && <circle cx={w / 2} cy={h / 2} r={w / 2 + 4} fill="none" stroke="#33516c" strokeWidth={1} />}
+          {d.anchor && <circle cx={w / 2} cy={h / 2} r={w / 2 + 4} fill="none" stroke="#2a4a41" strokeWidth={1} />}
           <circle cx={w / 2} cy={h / 2} r={w / 2 - 1.5} {...common} />
         </svg>
       );
@@ -85,7 +85,7 @@ const EvidenceNode = memo(function EvidenceNode({ data, selected }: NodeProps<No
   const { w, h } = SHAPE[data.kind];
   const dim = data.dim === 2 ? "opacity-[0.07] pointer-events-none" : data.dim === 1 ? "opacity-30" : "";
   const Glyph = data.kind === "user" || data.kind === "ip" || data.kind === "host" ? GLYPH[data.kind] : null;
-  const accent = data.stance === "contradicting" ? "#9db0c3" : data.critical ? "#c75d65" : "#e8a15d";
+  const accent = data.stance === "contradicting" ? "#9bb0aa" : data.critical ? "#d6595f" : "#e8a15d";
 
   return (
     <div
@@ -173,7 +173,7 @@ const EvidenceEdge = memo(function EvidenceEdge({ id, data, selected }: EdgeProp
       />
       {showLabel && (
         <text x={(p1.x + p2.x) / 2} y={(p1.y + p2.y) / 2 - 6} textAnchor="middle" className="fill-ink-muted font-mono" fontSize={10}
-          style={{ paintOrder: "stroke", stroke: "#0b111b", strokeWidth: 4 }}>
+          style={{ paintOrder: "stroke", stroke: "#050b0a", strokeWidth: 4 }}>
           {data.relation.replace(/_/g, " ")}{state !== "observed" ? ` (${state})` : ""}
         </text>
       )}
@@ -323,7 +323,7 @@ function Flow({ graph, layout, highlight, selection, onSelectNode, onSelectEdge,
         }}
         onPaneClick={onClear}
       >
-        <Background gap={32} size={1} color="#1a2c40" />
+        <Background gap={32} size={1} color="#14231e" />
         <Controls showInteractive={false} position="bottom-left" />
 
         <FlowPanel position="top-right" className="!m-2 flex gap-1.5">
