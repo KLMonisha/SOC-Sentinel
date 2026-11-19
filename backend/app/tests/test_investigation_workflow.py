@@ -31,12 +31,16 @@ def sample_events():
     ]
 
 
-def test_workflow_retrieves_and_reevaluates(sample_events):
-    request = InvestigationRequest(
-        tool="search_by_entity",
-        entity_type="username",
-        entity_value="alice",
+def make_request(username="alice"):
+    return InvestigationRequest(
+        tool="get_related_auth_events",
+        params={"username": username},
+        idempotency_key="workflow-test-001",
     )
+
+
+def test_workflow_retrieves_and_reevaluates(sample_events):
+    request = make_request()
 
     result = investigate_incident(
         events=sample_events,
@@ -49,14 +53,11 @@ def test_workflow_retrieves_and_reevaluates(sample_events):
     assert result["reevaluation"] is not None
     assert result["budget_remaining"] == 2
     assert result["original_data_modified"] is False
+    assert len(result["request_hash"]) == 64
 
 
 def test_workflow_handles_no_new_evidence(sample_events):
-    request = InvestigationRequest(
-        tool="search_by_entity",
-        entity_type="username",
-        entity_value="nobody",
-    )
+    request = make_request("nobody")
 
     result = investigate_incident(
         events=sample_events,
@@ -67,14 +68,11 @@ def test_workflow_handles_no_new_evidence(sample_events):
     assert result["status"] == "completed_no_new_evidence"
     assert result["reevaluation"] is None
     assert result["budget_remaining"] == 2
+    assert result["original_data_modified"] is False
 
 
 def test_workflow_rejects_unknown_initial_event(sample_events):
-    request = InvestigationRequest(
-        tool="search_by_entity",
-        entity_type="username",
-        entity_value="alice",
-    )
+    request = make_request()
 
     with pytest.raises(ValueError, match="Unknown initial event IDs"):
         investigate_incident(
@@ -84,26 +82,8 @@ def test_workflow_rejects_unknown_initial_event(sample_events):
         )
 
 
-def test_workflow_rejects_seed_outside_initial_evidence(sample_events):
-    request = InvestigationRequest(
-        tool="expand_related_events",
-        seed_event_ids=["evt_5"],
-    )
-
-    with pytest.raises(ValueError, match="Seed event IDs"):
-        investigate_incident(
-            events=sample_events,
-            initial_event_ids=["evt_1"],
-            request=request,
-        )
-
-
 def test_workflow_rejects_duplicate_initial_ids(sample_events):
-    request = InvestigationRequest(
-        tool="search_by_entity",
-        entity_type="username",
-        entity_value="alice",
-    )
+    request = make_request()
 
     with pytest.raises(ValueError, match="Duplicate initial"):
         investigate_incident(
@@ -114,11 +94,7 @@ def test_workflow_rejects_duplicate_initial_ids(sample_events):
 
 
 def test_workflow_rejects_exhausted_budget(sample_events):
-    request = InvestigationRequest(
-        tool="search_by_entity",
-        entity_type="username",
-        entity_value="alice",
-    )
+    request = make_request()
 
     with pytest.raises(ValueError, match="budget exhausted"):
         investigate_incident(
@@ -127,3 +103,28 @@ def test_workflow_rejects_exhausted_budget(sample_events):
             request=request,
             budget_remaining=0,
         )
+
+
+def test_workflow_rejects_empty_initial_event_ids(sample_events):
+    request = make_request()
+
+    with pytest.raises(ValueError):
+        investigate_incident(
+            events=sample_events,
+            initial_event_ids=[],
+            request=request,
+        )
+
+
+def test_workflow_does_not_modify_original_events(sample_events):
+    request = make_request()
+
+    original_ids = [event.event_id for event in sample_events]
+
+    investigate_incident(
+        events=sample_events,
+        initial_event_ids=["evt_1", "evt_2", "evt_3", "evt_4"],
+        request=request,
+    )
+
+    assert [event.event_id for event in sample_events] == original_ids

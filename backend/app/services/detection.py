@@ -1,4 +1,3 @@
-
 from collections import defaultdict
 from hashlib import sha256
 from datetime import timedelta
@@ -6,7 +5,6 @@ from datetime import timedelta
 from app.models.events import SecurityEvent
 
 
-# Detection thresholds
 BRUTE_FORCE_THRESHOLD = 5
 BRUTE_FORCE_WINDOW = timedelta(minutes=10)
 
@@ -23,14 +21,20 @@ def create_alert(
     severity: str,
     description: str,
     events: list[SecurityEvent],
-    evidence: dict
+    evidence: dict,
 ) -> dict:
-    """Create a consistent, traceable alert."""
-
     event_ids = sorted({event.event_id for event in events})
 
     fingerprint = f"{rule_id}:{','.join(event_ids)}"
-    alert_hash = sha256(fingerprint.encode()).hexdigest()[:16]
+    alert_hash = sha256(fingerprint.encode("utf-8")).hexdigest()[:16]
+
+    # This detection is evidence supporting the finding.
+    severity_weights = {
+        "low": 10,
+        "medium": 20,
+        "high": 30,
+        "critical": 40,
+    }
 
     return {
         "alert_id": f"alert_{alert_hash}",
@@ -39,16 +43,13 @@ def create_alert(
         "severity": severity,
         "description": description,
         "event_ids": event_ids,
-        "evidence": evidence
+        "evidence": evidence,
+        "stance": "supporting",
+        "weight": severity_weights.get(severity, 10),
     }
 
 
 def detect_brute_force(events: list[SecurityEvent]) -> list[dict]:
-    """
-    Detect repeated failed authentication attempts
-    from the same IP against the same username.
-    """
-
     groups = defaultdict(list)
 
     for event in events:
@@ -81,15 +82,15 @@ def detect_brute_force(events: list[SecurityEvent]) -> list[dict]:
                     description=(
                         f"{len(matched)} failed login attempts were detected "
                         f"from {source_ip} against user {username} "
-                        f"within 10 minutes."
+                        "within 10 minutes."
                     ),
                     events=matched,
                     evidence={
                         "source_ip": source_ip,
                         "username": username,
                         "failed_attempts": len(matched),
-                        "window_minutes": 10
-                    }
+                        "window_minutes": 10,
+                    },
                 ))
                 break
 
@@ -97,20 +98,15 @@ def detect_brute_force(events: list[SecurityEvent]) -> list[dict]:
 
 
 def detect_success_after_failures(
-    events: list[SecurityEvent]
+    events: list[SecurityEvent],
 ) -> list[dict]:
-    """
-    Detect a successful login after multiple failed attempts
-    from the same IP against the same username.
-    """
-
     groups = defaultdict(list)
 
     for event in events:
         if (
             event.event_type in {
                 "authentication_failure",
-                "authentication_success"
+                "authentication_success",
             }
             and event.source_ip
             and event.username
@@ -132,15 +128,15 @@ def detect_success_after_failures(
                 if (
                     candidate.event_type == "authentication_failure"
                     and event.timestamp - SUCCESS_AFTER_FAILURE_WINDOW
-                    <= candidate.timestamp
-                    < event.timestamp
+                    <= candidate.timestamp < event.timestamp
                 )
             ]
 
             if len(previous_events) >= SUCCESS_AFTER_FAILURE_THRESHOLD:
-                matched = previous_events[-SUCCESS_AFTER_FAILURE_THRESHOLD:] + [
-                    event
-                ]
+                matched = (
+                    previous_events[-SUCCESS_AFTER_FAILURE_THRESHOLD:]
+                    + [event]
+                )
 
                 alerts.append(create_alert(
                     rule_id="DET-002",
@@ -148,8 +144,8 @@ def detect_success_after_failures(
                     severity="critical",
                     description=(
                         f"A successful login for {username} from {source_ip} "
-                        f"followed at least 3 failed login attempts "
-                        f"within 15 minutes."
+                        "followed at least 3 failed login attempts "
+                        "within 15 minutes."
                     ),
                     events=matched,
                     evidence={
@@ -157,21 +153,16 @@ def detect_success_after_failures(
                         "username": username,
                         "failed_attempts_before_success": len(previous_events),
                         "window_minutes": 15,
-                        "successful_event_id": event.event_id
-                    }
+                        "successful_event_id": event.event_id,
+                    },
                 ))
 
     return alerts
 
 
 def detect_suspicious_access(
-    events: list[SecurityEvent]
+    events: list[SecurityEvent],
 ) -> list[dict]:
-    """
-    Detect repeated denied web-access attempts from the same IP
-    against the same resource.
-    """
-
     groups = defaultdict(list)
 
     for event in events:
@@ -211,8 +202,8 @@ def detect_suspicious_access(
                         "source_ip": source_ip,
                         "resource": resource,
                         "denied_attempts": len(matched),
-                        "window_minutes": 10
-                    }
+                        "window_minutes": 10,
+                    },
                 ))
                 break
 
@@ -220,12 +211,8 @@ def detect_suspicious_access(
 
 
 def run_detection(events: list[SecurityEvent]) -> list[dict]:
-    """Run all enabled deterministic detection rules."""
-
     alerts = []
-
     alerts.extend(detect_brute_force(events))
     alerts.extend(detect_success_after_failures(events))
     alerts.extend(detect_suspicious_access(events))
-
     return alerts

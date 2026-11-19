@@ -2,61 +2,77 @@
 from datetime import datetime, timezone
 
 
-def _resolve_event_ids(
-    event_ids: list[str],
+def _valid_citations(
+    citations: list[str],
     available_event_ids: set[str],
-) -> list[str]:
-    """Keep only valid, unique evidence references."""
+) -> tuple[list[str], bool]:
+    if not isinstance(citations, list) or not citations:
+        return [], False
 
-    return sorted({
-        event_id
-        for event_id in event_ids
-        if event_id in available_event_ids
-    })
+    valid_citations = []
+    seen = set()
+    has_invalid = False
+    has_duplicate = False
+
+    for event_id in citations:
+        if not isinstance(event_id, str) or event_id not in available_event_ids:
+            has_invalid = True
+            continue
+
+        if event_id in seen:
+            has_duplicate = True
+            continue
+
+        seen.add(event_id)
+        valid_citations.append(event_id)
+
+    is_valid = (
+        bool(valid_citations)
+        and not has_invalid
+        and not has_duplicate
+    )
+
+    return valid_citations, is_valid
 
 
 def validate_report_citations(
     report: dict,
     available_event_ids: set[str],
 ) -> dict:
-    """
-    Verify that every report claim references existing events.
-    Invalid claims are marked rather than silently accepted.
-    """
+    verified_count = 0
+    rejected_count = 0
+    total_count = 0
 
-    validation_results = []
-    all_valid = True
+    for claim in report.get("claims", []):
+        total_count += 1
 
-    for index, claim in enumerate(report.get("claims", [])):
-        cited_ids = claim.get("event_ids", [])
+        original_citations = claim.get("citations", [])
 
-        valid_ids = _resolve_event_ids(
-            cited_ids,
+        citations, valid = _valid_citations(
+            original_citations,
             available_event_ids,
         )
 
-        valid = (
-            bool(cited_ids)
-            and len(valid_ids) == len(set(cited_ids))
-        )
+        claim["citations"] = citations
+        claim["verified"] = valid
 
-        if not valid:
-            all_valid = False
+        if valid:
+            claim["verification_note"] = (
+                "All cited event IDs resolve to events in this case."
+            )
+            verified_count += 1
+        else:
+            claim["verification_note"] = (
+                "Claim could not be verified because citations are "
+                "missing, duplicated, or do not resolve to events "
+                "in this case."
+            )
+            rejected_count += 1
 
-        validation_results.append({
-            "claim_index": index,
-            "valid": valid,
-            "cited_event_ids": cited_ids,
-            "resolved_event_ids": valid_ids,
-        })
-
-    report["citation_validation"] = {
-        "all_valid": all_valid,
-        "total_claims": len(validation_results),
-        "validated_claims": sum(
-            item["valid"] for item in validation_results
-        ),
-        "results": validation_results,
+    report["citation_counts"] = {
+        "total": total_count,
+        "verified": verified_count,
+        "rejected": rejected_count,
     }
 
     return report
@@ -67,7 +83,6 @@ def _build_executive_summary(
     alerts: list[dict],
     events: list,
 ) -> str:
-
     if not alerts:
         return (
             f"Analysis completed across {len(events)} normalized events. "
@@ -84,16 +99,15 @@ def _build_executive_summary(
     if highest_risk:
         return (
             f"Analysis identified {len(alerts)} alert(s) across "
-            f"{len(incidents)} incident(s). The highest incident risk "
-            f"score was {highest_risk['risk_score']}/100, classified "
-            f"as {highest_risk['severity']}. "
+            f"{len(incidents)} case(s). The highest case risk score "
+            f"was {highest_risk['risk_score']}/100, classified as "
+            f"{highest_risk.get('severity', 'unknown')}. "
             f"The investigation used {len(events)} normalized events."
         )
 
     return (
         f"Analysis identified {len(alerts)} alert(s) across "
-        f"{len(events)} normalized events. No correlated incidents "
-        "were produced."
+        f"{len(events)} normalized events. No correlated cases were produced."
     )
 
 
@@ -102,49 +116,43 @@ def _build_claims(
     incidents: list[dict],
     available_event_ids: set[str],
 ) -> list[dict]:
-
     claims = []
 
     for alert in alerts:
-        evidence_ids = _resolve_event_ids(
-            alert.get("event_ids", []),
-            available_event_ids,
-        )
-
-        if not evidence_ids:
-            continue
+        # Keep original citations here.
+        # validate_report_citations() will verify and filter them.
+        citations = alert.get("event_ids", [])
 
         claims.append({
             "type": "detection_finding",
             "title": alert.get("title", "Security finding"),
-            "statement": alert.get("description", ""),
+            "text": alert.get("description", ""),
             "severity": alert.get("severity", "unknown"),
-            "confidence": alert.get("confidence", {}),
-            "mitre_attack": alert.get("mitre_attack", []),
-            "event_ids": evidence_ids,
+            "stance": alert.get("stance", "supporting"),
+            "weight": alert.get("weight", 0),
+            "citations": citations,
+            "verified": False,
+            "verification_note": None,
         })
 
     for incident in incidents:
-        evidence_ids = _resolve_event_ids(
-            incident.get("event_ids", []),
-            available_event_ids,
-        )
-
-        if not evidence_ids:
-            continue
+        # Keep original citations for validation.
+        citations = incident.get("event_ids", [])
 
         claims.append({
-            "type": "incident_assessment",
-            "title": "Correlated incident assessment",
-            "statement": (
-                f"Incident contains {incident.get('alert_count', 0)} "
-                f"alert(s), with a heuristic risk score of "
+            "type": "case_assessment",
+            "title": "Correlated case assessment",
+            "text": (
+                f"Case contains {incident.get('alert_count', 0)} alert(s), "
+                f"with a heuristic risk score of "
                 f"{incident.get('risk_score', 0)}/100 and severity "
                 f"{incident.get('severity', 'unknown')}."
             ),
             "severity": incident.get("severity", "unknown"),
             "risk_score": incident.get("risk_score", 0),
-            "event_ids": evidence_ids,
+            "citations": citations,
+            "verified": False,
+            "verification_note": None,
         })
 
     return claims
@@ -154,12 +162,10 @@ def _build_recommendations(
     alerts: list[dict],
     coverage: dict,
 ) -> list[dict]:
-
     recommendations = []
 
     rule_ids = {
-        alert.get("rule_id")
-        for alert in alerts
+        alert.get("rule_id") for alert in alerts
     }
 
     if "DET-001" in rule_ids or "DET-002" in rule_ids:
@@ -182,7 +188,10 @@ def _build_recommendations(
             "execution": "manual_investigation",
         })
 
-    missing = coverage.get("dimensions_missing", [])
+    missing = coverage.get(
+        "coverage_missing",
+        coverage.get("dimensions_missing", []),
+    )
 
     if missing:
         recommendations.append({
@@ -213,13 +222,6 @@ def generate_investigation_report(
     incidents: list[dict],
     telemetry_coverage: dict,
 ) -> dict:
-    """
-    Generate a deterministic, evidence-linked investigation report.
-
-    No LLM is required. All claims originate from the existing
-    detection and correlation pipeline.
-    """
-
     available_event_ids = {
         event.event_id for event in events
     }
@@ -230,14 +232,16 @@ def generate_investigation_report(
         available_event_ids,
     )
 
+    generated_at = datetime.now(timezone.utc)
+
     report = {
         "report_id": (
-            "report_" + datetime.now(timezone.utc).strftime(
-                "%Y%m%dT%H%M%S%f"
-            )
+            "report_"
+            + generated_at.strftime("%Y%m%dT%H%M%S%f")
         ),
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": generated_at.isoformat(),
         "generated_by": "template_fallback",
+        "fallback_reason": "Deterministic evidence-linked report generation.",
         "report_status": "completed",
         "executive_summary": _build_executive_summary(
             incidents,
@@ -247,7 +251,7 @@ def generate_investigation_report(
         "dataset_summary": {
             "event_count": len(events),
             "alert_count": len(alerts),
-            "incident_count": len(incidents),
+            "case_count": len(incidents),
         },
         "highest_risk_score": max(
             (
@@ -258,10 +262,12 @@ def generate_investigation_report(
         ),
         "claims": claims,
         "telemetry_coverage": telemetry_coverage,
-        "missing_telemetry": telemetry_coverage.get(
-            "dimensions_missing", []
+        "coverage_missing": telemetry_coverage.get(
+            "coverage_missing",
+            telemetry_coverage.get("dimensions_missing", []),
         ),
         "alerts": alerts,
+        "cases": incidents,
         "incidents": incidents,
         "recommendations": _build_recommendations(
             alerts,

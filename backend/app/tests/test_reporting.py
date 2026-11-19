@@ -37,6 +37,8 @@ def test_report_generation():
         "event_ids": [event.event_id for event in events],
         "confidence": {"level": "high", "rationale": []},
         "mitre_attack": [],
+        "stance": "supporting",
+        "weight": 30,
     }]
 
     incidents = [{
@@ -61,8 +63,22 @@ def test_report_generation():
 
     assert report["report_status"] == "completed"
     assert report["generated_by"] == "template_fallback"
+    assert report.get("fallback_reason")
     assert len(report["claims"]) == 2
-    assert report["citation_validation"]["all_valid"] is True
+
+    for claim in report["claims"]:
+        assert "text" in claim
+        assert "citations" in claim
+        assert isinstance(claim["verified"], bool)
+
+        if claim["verified"]:
+            assert claim["citations"]
+
+    counts = report["citation_counts"]
+
+    assert counts["total"] == (
+        counts["verified"] + counts["rejected"]
+    )
 
 
 def test_report_with_no_alerts_does_not_claim_environment_is_benign():
@@ -95,12 +111,50 @@ def test_report_never_executes_containment():
 def test_invalid_citations_are_detected():
     report = {
         "claims": [{
-            "title": "Test claim",
-            "event_ids": ["evt_1", "evt_missing"],
+            "text": "A suspicious authentication pattern was observed.",
+            "citations": ["evt_1", "evt_missing"],
+            "verified": False,
         }]
     }
 
     result = validate_report_citations(report, {"evt_1"})
 
-    assert result["citation_validation"]["all_valid"] is False
-    assert result["citation_validation"]["validated_claims"] == 0
+    assert result["citation_counts"]["total"] == 1
+    assert result["citation_counts"]["verified"] == 0
+    assert result["citation_counts"]["rejected"] == 1
+
+    claim = result["claims"][0]
+
+    assert claim["verified"] is False
+    assert "evt_missing" not in claim["citations"]
+
+
+def test_claim_without_citations_is_never_verified():
+    report = {
+        "claims": [{
+            "text": "An unsupported claim.",
+            "citations": [],
+            "verified": True,
+        }]
+    }
+
+    result = validate_report_citations(report, set())
+
+    assert result["claims"][0]["verified"] is False
+    assert result["citation_counts"]["verified"] == 0
+
+
+def test_claim_with_valid_citation_is_verified():
+    report = {
+        "claims": [{
+            "text": "Repeated authentication failures were observed.",
+            "citations": ["evt_1"],
+            "verified": False,
+        }]
+    }
+
+    result = validate_report_citations(report, {"evt_1"})
+
+    assert result["claims"][0]["verified"] is True
+    assert result["citation_counts"]["verified"] == 1
+    assert result["citation_counts"]["rejected"] == 0

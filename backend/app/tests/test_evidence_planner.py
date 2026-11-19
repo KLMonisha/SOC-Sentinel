@@ -18,12 +18,13 @@ def make_event(
     host=None,
     resource=None,
     minutes=0,
+    event_type="authentication_failure",
 ):
     return SecurityEvent(
         event_id=event_id,
         dataset_id="ds_test",
         timestamp=datetime.now(timezone.utc) + timedelta(minutes=minutes),
-        event_type="authentication_failure",
+        event_type=event_type,
         username=username,
         source_ip=source_ip,
         host=host,
@@ -48,11 +49,19 @@ def sample_events():
     ]
 
 
-def test_search_by_entity(sample_events):
-    request = InvestigationRequest(
-        tool="search_by_entity",
-        entity_type="username",
-        entity_value="alice",
+def make_request(tool, params, limit=10):
+    return InvestigationRequest(
+        tool=tool,
+        params=params,
+        idempotency_key="test-key-0001",
+        limit=limit,
+    )
+
+
+def test_get_related_auth_events(sample_events):
+    request = make_request(
+        "get_related_auth_events",
+        {"username": "alice"},
     )
 
     result = run_investigation(
@@ -61,18 +70,19 @@ def test_search_by_entity(sample_events):
         known_event_ids={"evt_1"},
     )
 
-    returned_ids = {event["event_id"] for event in result.retrieved_events}
+    returned_ids = {
+        event["event_id"] for event in result.retrieved_events
+    }
 
     assert returned_ids == {"evt_2", "evt_5"}
     assert result.budget_remaining == 2
     assert result.budget_consumed == 1
 
 
-def test_search_by_entity_is_case_insensitive(sample_events):
-    request = InvestigationRequest(
-        tool="search_by_entity",
-        entity_type="username",
-        entity_value="ALICE",
+def test_related_auth_events_is_case_insensitive(sample_events):
+    request = make_request(
+        "get_related_auth_events",
+        {"username": "ALICE"},
     )
 
     result = run_investigation(sample_events, request)
@@ -80,46 +90,60 @@ def test_search_by_entity_is_case_insensitive(sample_events):
     assert result.retrieved_count == 3
 
 
-def test_search_time_window(sample_events):
-    start = sample_events[1].timestamp.isoformat()
-    end = sample_events[2].timestamp.isoformat()
-
-    request = InvestigationRequest(
-        tool="search_time_window",
-        start_time=start,
-        end_time=end,
+def test_get_related_auth_events_by_source_ip(sample_events):
+    request = make_request(
+        "get_related_auth_events",
+        {"source_ip": "10.0.0.1"},
     )
 
-    result = run_investigation(events=sample_events, request=request)
+    result = run_investigation(sample_events, request)
 
-    returned_ids = {event["event_id"] for event in result.retrieved_events}
+    returned_ids = {
+        event["event_id"] for event in result.retrieved_events
+    }
 
-    assert returned_ids == {"evt_2", "evt_3"}
+    assert returned_ids == {"evt_1", "evt_2"}
 
 
-def test_expand_related_events(sample_events):
-    request = InvestigationRequest(
-        tool="expand_related_events",
-        seed_event_ids=["evt_1"],
+def test_get_post_login_activity(sample_events):
+    after = sample_events[0].timestamp.isoformat()
+
+    request = make_request(
+        "get_post_login_activity",
+        {
+            "username": "alice",
+            "after": after,
+        },
     )
 
-    result = run_investigation(
-        events=sample_events,
-        request=request,
-        known_event_ids={"evt_1"},
+    result = run_investigation(sample_events, request)
+
+    returned_ids = {
+        event["event_id"] for event in result.retrieved_events
+    }
+
+    assert returned_ids == {"evt_2", "evt_5"}
+
+
+def test_get_ip_context(sample_events):
+    request = make_request(
+        "get_ip_context",
+        {"source_ip": "10.0.0.1"},
     )
 
-    returned_ids = {event["event_id"] for event in result.retrieved_events}
+    result = run_investigation(sample_events, request)
 
-    assert "evt_2" in returned_ids
-    assert "evt_3" not in returned_ids
+    returned_ids = {
+        event["event_id"] for event in result.retrieved_events
+    }
+
+    assert returned_ids == {"evt_1", "evt_2"}
 
 
 def test_investigation_budget_exhaustion(sample_events):
-    request = InvestigationRequest(
-        tool="search_by_entity",
-        entity_type="username",
-        entity_value="alice",
+    request = make_request(
+        "get_related_auth_events",
+        {"username": "alice"},
     )
 
     with pytest.raises(ValueError, match="budget exhausted"):
@@ -130,32 +154,33 @@ def test_investigation_budget_exhaustion(sample_events):
         )
 
 
-def test_unknown_seed_event_is_rejected(sample_events):
-    request = InvestigationRequest(
-        tool="expand_related_events",
-        seed_event_ids=["unknown_event"],
+def test_missing_required_params_are_rejected(sample_events):
+    request = make_request(
+        "get_ip_context",
+        {},
     )
 
-    with pytest.raises(ValueError, match="Unknown seed event IDs"):
+    with pytest.raises(ValueError):
         run_investigation(sample_events, request)
 
 
-def test_invalid_time_range_is_rejected(sample_events):
-    request = InvestigationRequest(
-        tool="search_time_window",
-        start_time="2026-11-20T12:00:00+00:00",
-        end_time="2026-11-19T12:00:00+00:00",
+def test_invalid_timestamp_is_rejected(sample_events):
+    request = make_request(
+        "get_post_login_activity",
+        {
+            "username": "alice",
+            "after": "2026-11-19T12:00:00",
+        },
     )
 
-    with pytest.raises(ValueError, match="cannot be after"):
+    with pytest.raises(ValueError):
         run_investigation(sample_events, request)
 
 
 def test_result_respects_limit(sample_events):
-    request = InvestigationRequest(
-        tool="search_by_entity",
-        entity_type="username",
-        entity_value="alice",
+    request = make_request(
+        "get_related_auth_events",
+        {"username": "alice"},
         limit=1,
     )
 
@@ -167,10 +192,9 @@ def test_result_respects_limit(sample_events):
 
 
 def test_empty_search_still_consumes_budget(sample_events):
-    request = InvestigationRequest(
-        tool="search_by_entity",
-        entity_type="username",
-        entity_value="nobody",
+    request = make_request(
+        "get_related_auth_events",
+        {"username": "nobody"},
     )
 
     result = run_investigation(sample_events, request)
@@ -178,3 +202,27 @@ def test_empty_search_still_consumes_budget(sample_events):
     assert result.retrieved_count == 0
     assert result.budget_remaining == 2
     assert result.budget_consumed == 1
+
+
+def test_request_hash_is_returned(sample_events):
+    request = make_request(
+        "get_related_auth_events",
+        {"username": "alice"},
+    )
+
+    result = run_investigation(sample_events, request)
+
+    assert len(result.request_hash) == 64
+    assert all(
+        character in "0123456789abcdef"
+        for character in result.request_hash
+    )
+
+
+def test_invalid_idempotency_key_is_rejected():
+    with pytest.raises(ValueError):
+        InvestigationRequest(
+            tool="get_ip_context",
+            params={"source_ip": "10.0.0.1"},
+            idempotency_key="bad key!",
+        )
