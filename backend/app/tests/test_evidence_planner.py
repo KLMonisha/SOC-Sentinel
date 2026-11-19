@@ -21,6 +21,7 @@ def make_event(
 ):
     return SecurityEvent(
         event_id=event_id,
+        dataset_id="ds_test",
         timestamp=datetime.now(timezone.utc) + timedelta(minutes=minutes),
         event_type="authentication_failure",
         username=username,
@@ -29,6 +30,8 @@ def make_event(
         resource=resource,
         outcome="failure",
         source="test.csv",
+        line_number=minutes + 1,
+        raw_text=f'{{"event_id":"{event_id}"}}',
         raw_hash="a" * 64,
         raw_record={},
     )
@@ -58,9 +61,7 @@ def test_search_by_entity(sample_events):
         known_event_ids={"evt_1"},
     )
 
-    returned_ids = {
-        event["event_id"] for event in result.retrieved_events
-    }
+    returned_ids = {event["event_id"] for event in result.retrieved_events}
 
     assert returned_ids == {"evt_2", "evt_5"}
     assert result.budget_remaining == 2
@@ -89,14 +90,9 @@ def test_search_time_window(sample_events):
         end_time=end,
     )
 
-    result = run_investigation(
-        events=sample_events,
-        request=request,
-    )
+    result = run_investigation(events=sample_events, request=request)
 
-    returned_ids = {
-        event["event_id"] for event in result.retrieved_events
-    }
+    returned_ids = {event["event_id"] for event in result.retrieved_events}
 
     assert returned_ids == {"evt_2", "evt_3"}
 
@@ -113,9 +109,7 @@ def test_expand_related_events(sample_events):
         known_event_ids={"evt_1"},
     )
 
-    returned_ids = {
-        event["event_id"] for event in result.retrieved_events
-    }
+    returned_ids = {event["event_id"] for event in result.retrieved_events}
 
     assert "evt_2" in returned_ids
     assert "evt_3" not in returned_ids

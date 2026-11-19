@@ -1,6 +1,4 @@
 
-from datetime import datetime, timezone
-
 import pytest
 from pydantic import ValidationError
 
@@ -10,17 +8,20 @@ from app.models.events import SecurityEvent
 def create_event():
     return SecurityEvent(
         event_id="evt_001",
+        dataset_id="ds_test",
         timestamp="2026-11-18T10:30:00Z",
         event_type="authentication_failure",
         username="alice",
         source_ip="192.0.2.10",
         outcome="failure",
         source="auth.csv",
+        line_number=1,
+        raw_text='{"username":"alice","event":"failed_login"}',
         raw_hash="a" * 64,
         raw_record={
             "username": "alice",
-            "event": "failed_login"
-        }
+            "event": "failed_login",
+        },
     )
 
 
@@ -43,11 +44,14 @@ def test_invalid_outcome():
     with pytest.raises(ValidationError):
         SecurityEvent(
             event_id="evt_002",
+            dataset_id="ds_test",
             timestamp="2026-11-18T10:30:00Z",
             event_type="login",
             outcome="maybe",
             source="auth.csv",
-            raw_hash="a" * 64
+            line_number=1,
+            raw_text='{"event":"login"}',
+            raw_hash="a" * 64,
         )
 
 
@@ -55,10 +59,13 @@ def test_missing_timezone():
     with pytest.raises(ValidationError):
         SecurityEvent(
             event_id="evt_003",
+            dataset_id="ds_test",
             timestamp="2026-11-18T10:30:00",
             event_type="login",
             source="auth.csv",
-            raw_hash="a" * 64
+            line_number=1,
+            raw_text='{"event":"login"}',
+            raw_hash="a" * 64,
         )
 
 
@@ -66,9 +73,12 @@ def test_extra_fields_rejected():
     with pytest.raises(ValidationError):
         SecurityEvent(
             event_id="evt_004",
+            dataset_id="ds_test",
             timestamp="2026-11-18T10:30:00Z",
             event_type="login",
             source="auth.csv",
+            line_number=1,
+            raw_text='{"event":"login"}',
             raw_hash="a" * 64,
-            unexpected_field="test"
+            unexpected_field="test",
         )

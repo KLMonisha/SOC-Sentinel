@@ -10,12 +10,15 @@ from app.services.investigation_engine import reevaluate_investigation
 def make_event(event_id, minutes):
     return SecurityEvent(
         event_id=event_id,
+        dataset_id="ds_test",
         timestamp=datetime.now(timezone.utc) + timedelta(minutes=minutes),
         event_type="authentication_failure",
         username="alice",
         source_ip="203.0.113.45",
         outcome="failure",
         source="test.csv",
+        line_number=minutes + 1,
+        raw_text=f'{{"event_id":"{event_id}"}}',
         raw_hash="a" * 64,
         raw_record={},
     )
@@ -35,9 +38,7 @@ def sample_events():
 def test_retrieved_event_changes_detection(sample_events):
     result = reevaluate_investigation(
         events=sample_events,
-        initial_event_ids=[
-            "evt_1", "evt_2", "evt_3", "evt_4"
-        ],
+        initial_event_ids=["evt_1", "evt_2", "evt_3", "evt_4"],
         retrieved_event_ids=["evt_5"],
     )
 
@@ -50,9 +51,7 @@ def test_retrieved_event_changes_detection(sample_events):
 def test_expanded_context_contains_retrieved_events(sample_events):
     result = reevaluate_investigation(
         events=sample_events,
-        initial_event_ids=[
-            "evt_1", "evt_2", "evt_3", "evt_4"
-        ],
+        initial_event_ids=["evt_1", "evt_2", "evt_3", "evt_4"],
         retrieved_event_ids=["evt_5"],
     )
 
@@ -63,9 +62,7 @@ def test_expanded_context_contains_retrieved_events(sample_events):
 def test_retrieved_event_is_classified_as_supporting(sample_events):
     result = reevaluate_investigation(
         events=sample_events,
-        initial_event_ids=[
-            "evt_1", "evt_2", "evt_3", "evt_4"
-        ],
+        initial_event_ids=["evt_1", "evt_2", "evt_3", "evt_4"],
         retrieved_event_ids=["evt_5"],
     )
 

@@ -11,12 +11,15 @@ from app.services.reporting import (
 def make_event(event_id):
     return SecurityEvent(
         event_id=event_id,
+        dataset_id="ds_test",
         timestamp=datetime.now(timezone.utc),
         event_type="authentication_failure",
         username="alice",
         source_ip="203.0.113.10",
         outcome="failure",
         source="test",
+        line_number=1,
+        raw_text=f'{{"event_id":"{event_id}"}}',
         raw_hash="a" * 64,
         raw_record={},
     )
@@ -97,10 +100,7 @@ def test_invalid_citations_are_detected():
         }]
     }
 
-    result = validate_report_citations(
-        report,
-        {"evt_1"},
-    )
+    result = validate_report_citations(report, {"evt_1"})
 
     assert result["citation_validation"]["all_valid"] is False
     assert result["citation_validation"]["validated_claims"] == 0

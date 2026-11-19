@@ -1,5 +1,5 @@
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from app.models.events import SecurityEvent
 from app.services.assessment import (
@@ -19,6 +19,7 @@ def make_event(
 ):
     return SecurityEvent(
         event_id=event_id,
+        dataset_id="ds_test",
         timestamp=datetime.now(timezone.utc),
         event_type=event_type,
         username=username,
@@ -27,6 +28,8 @@ def make_event(
         host=host,
         outcome=outcome,
         source="test",
+        line_number=1,
+        raw_text=f'{{"event_id":"{event_id}"}}',
         raw_hash="a" * 64,
         raw_record={},
     )
@@ -48,7 +51,6 @@ def test_brute_force_alert_has_high_confidence():
     }
 
     result = assess_alert_confidence(alert, events)
-
     assert result["level"] == "high"
 
 
@@ -68,7 +70,6 @@ def test_missing_event_reference_reduces_confidence():
     }
 
     result = assess_alert_confidence(alert, events)
-
     assert result["level"] == "medium"
 
 
@@ -77,7 +78,6 @@ def test_unknown_rule_returns_low_confidence():
         {"rule_id": "UNKNOWN", "event_ids": [], "evidence": {}},
         [],
     )
-
     assert result["level"] == "low"
 
 

@@ -15,12 +15,15 @@ def sample_events():
     return [
         SecurityEvent(
             event_id=f"evt_{i}",
+            dataset_id="ds_test",
             timestamp=base_time + timedelta(minutes=i),
             event_type="authentication_failure",
             username="alice",
             source_ip="203.0.113.45",
             outcome="failure",
             source="test.csv",
+            line_number=i,
+            raw_text=f'{{"event_id":"evt_{i}"}}',
             raw_hash="a" * 64,
             raw_record={},
         )
@@ -37,9 +40,7 @@ def test_workflow_retrieves_and_reevaluates(sample_events):
 
     result = investigate_incident(
         events=sample_events,
-        initial_event_ids=[
-            "evt_1", "evt_2", "evt_3", "evt_4"
-        ],
+        initial_event_ids=["evt_1", "evt_2", "evt_3", "evt_4"],
         request=request,
     )
 
