@@ -13,7 +13,7 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 MAX_RECORDS = 10000
 
 
-def read_csv(file_path: Path) -> list[dict[str, Any]]:
+def read_csv(file_path: Path) -> list[tuple[int, dict[str, Any]]]:
     """Reads CSV records as dictionaries."""
 
     with file_path.open(

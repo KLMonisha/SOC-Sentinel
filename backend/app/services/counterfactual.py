@@ -1,7 +1,11 @@
 from app.models.events import SecurityEvent
 from app.services.detection import run_detection
 from app.services.correlation import correlate_alerts
-
+from app.services.mitre_mapping import enrich_alerts_with_attack
+from app.services.assessment import (
+    enrich_alerts_with_confidence,
+    assess_telemetry_coverage,
+)
 
 def run_counterfactual(
     events: list[SecurityEvent],
@@ -49,6 +53,14 @@ def run_counterfactual(
 
     original_alerts = run_detection(events)
 
+    original_alerts = enrich_alerts_with_attack(original_alerts)
+    original_alerts = enrich_alerts_with_confidence(
+        original_alerts,
+        events
+    )
+
+    original_coverage = assess_telemetry_coverage(events)
+
     original_incidents = correlate_alerts(
         original_alerts,
         events
@@ -64,7 +76,15 @@ def run_counterfactual(
 
     # 4. Rerun the complete detection pipeline.
 
-    hypothetical_alerts = run_detection(
+    hypothetical_alerts = run_detection(hypothetical_events)
+
+    hypothetical_alerts = enrich_alerts_with_attack(hypothetical_alerts)
+    hypothetical_alerts = enrich_alerts_with_confidence(
+        hypothetical_alerts,
+        hypothetical_events
+    )
+
+    hypothetical_coverage = assess_telemetry_coverage(
         hypothetical_events
     )
 
@@ -270,6 +290,11 @@ def run_counterfactual(
             ),
 
             "per_incident_changes": per_incident_changes
+        },
+
+        "telemetry_coverage": {
+            "original": original_coverage,
+            "hypothetical": hypothetical_coverage,
         },
 
         "original_data_modified": False

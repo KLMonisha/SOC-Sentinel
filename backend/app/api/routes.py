@@ -3,14 +3,18 @@ import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
-
+from app.services.mitre_mapping import enrich_alerts_with_attack
 from app.services.ingestion import ingest_file, MAX_FILE_SIZE
 from app.services.detection import run_detection
 from app.services.correlation import correlate_alerts
 import json
-
+from app.services.reporting import generate_investigation_report
 from app.services.counterfactual import run_counterfactual
-
+from app.services.assessment import (
+    enrich_alerts_with_confidence,
+    assess_telemetry_coverage,
+)
+from app.services.llm_reporting import generate_llm_narrative
 router = APIRouter(prefix="/api", tags=["SOC Sentinel"])
 
 
@@ -73,9 +77,19 @@ async def analyze_logs(file: UploadFile = File(...)):
         # Stage 2: Detect suspicious activity.
         alerts = run_detection(events)
 
+        alerts = enrich_alerts_with_attack(alerts)
+        alerts = enrich_alerts_with_confidence(alerts, events)
+
+        coverage = assess_telemetry_coverage(events)
         # Stage 3: Correlate alerts into incidents.
         incidents = correlate_alerts(alerts, events)
-
+        report = generate_investigation_report(
+            events=events,
+            alerts=alerts,
+            incidents=incidents,
+            telemetry_coverage=coverage,
+        )
+        report = generate_llm_narrative(report)
         # Stage 4: Prepare a safe API response.
         quarantined_summary = [
             {
@@ -87,7 +101,7 @@ async def analyze_logs(file: UploadFile = File(...)):
 
         return {
             "status": "success",
-            "dataset": file.filename,
+            "dataset": original_filename,
             "summary": {
                 "total_records": ingestion_result["total_records"],
                 "valid_events": ingestion_result["valid_count"],
@@ -95,8 +109,10 @@ async def analyze_logs(file: UploadFile = File(...)):
                 "alerts_generated": len(alerts),
                 "incidents_created": len(incidents)
             },
+            "telemetry_coverage": coverage,
             "alerts": alerts,
             "incidents": incidents,
+            "report": report,
             "quarantined_records": quarantined_summary
         }
 
