@@ -30,6 +30,25 @@ describe("mock / live isolation", () => {
     expect(err.requestId).toBe("r9");
   });
 
+  test("with mocks off, the adversarial run goes to the network with exactly scenario_id and trials", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ schema_version: "1.0", request_id: "r" }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await api.runAdversarial({ scenario_id: "fake_analyst_authorization", trials: 5 });
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe("/api/adversarial/run");
+    expect(JSON.parse(init.body)).toStrictEqual({ scenario_id: "fake_analyst_authorization", trials: 5 });
+  });
+
+  test("an out-of-range trial count never reaches the network; a live outage never falls back to fixtures", async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError("down"));
+    vi.stubGlobal("fetch", fetchMock);
+    const bad = await api.runAdversarial({ scenario_id: "user_agent_injection", trials: 11 }).catch((e) => e);
+    expect(bad.code).toBe("invalid_request");
+    expect(fetchMock).not.toHaveBeenCalled();
+    const down = await api.runAdversarial({ scenario_id: "user_agent_injection", trials: 3 }).catch((e) => e);
+    expect(down.code).toBe("network_error");
+  });
+
   test("production code reaches fixtures only through the client's dynamic mock import", () => {
     const offenders = Object.entries(sources)
       .filter(([path]) => !/\.test\.(ts|tsx)$/.test(path) && !path.includes("/api/mocks/"))

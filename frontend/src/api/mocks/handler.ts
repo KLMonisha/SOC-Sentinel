@@ -5,7 +5,8 @@
  * engine: counterfactual output here is a simplified stand-in for the backend rerun.
  */
 import { devCases, devReports } from "./devCases";
-import { adversarialExample, cases as seed, meta, reports as seedReports } from "./fixtures";
+import { cases as seed, meta, reports as seedReports } from "./fixtures";
+import { adversarialRun, RED_TEAM_DELAY_MS, resetRedTeamFixtures } from "./redTeamScenarios";
 import { applyScript, investigationCases, scripts, SLOW_MS } from "./investigationScenarios";
 import {
   ERROR_CODES,
@@ -197,7 +198,8 @@ export async function handleMock(method: string, path: string, body?: unknown, f
     if (!["user_agent_injection", "url_query_contamination", "fake_analyst_authorization"].includes(req.scenario_id)) {
       return err(400, "invalid_request", "Unknown scenario_id.");
     }
-    return { status: 200, data: { ...adversarialExample, scenario: { ...adversarialExample.scenario, scenario_id: req.scenario_id } } };
+    await new Promise((r) => setTimeout(r, RED_TEAM_DELAY_MS)); // a real run is not instant; the lab must show a running state
+    return adversarialRun(req);
   }
 
   const m = /^\/api\/cases\/([^/]+)(?:\/(report|counterfactual|investigate|decision))?$/.exec(path);
@@ -241,5 +243,6 @@ export function resetMockSession(): void {
   Object.assign(state, structuredClone({ ...seed, ...devCases, ...investigationCases }));
   stored.clear();
   failedOnce.clear();
+  resetRedTeamFixtures();
   for (const k of Object.keys(decisions)) delete decisions[k];
 }

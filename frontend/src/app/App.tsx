@@ -8,7 +8,7 @@ import { CounterfactualIndex } from "@/pages/CounterfactualIndex";
 import { CounterfactualLab } from "@/pages/CounterfactualLab";
 import { InvestigationIndex } from "@/pages/InvestigationIndex";
 import { InvestigationLab } from "@/pages/InvestigationLab";
-import { Placeholder } from "@/pages/Placeholder";
+import { RedTeamLab } from "@/pages/RedTeamLab";
 import { ReportPage } from "@/pages/ReportPage";
 
 /** Deep links from before the landing page existed (`/evidence/case_x`) keep working under `/app`. */
@@ -40,7 +40,7 @@ export function App() {
           <Route path="investigation/:caseId" element={<InvestigationLab />} />
           <Route path="investigate" element={<Navigate to="/app/investigation" replace />} />
           <Route path="investigate/:caseId" element={<LegacyInvestigationRedirect />} />
-          <Route path="red-team" element={<Placeholder title="Red Team Lab" phase="Phase 9" />} />
+          <Route path="red-team" element={<RedTeamLab />} />
         </Route>
         <Route path="evidence" element={<Navigate to="/app/evidence" replace />} />
         <Route path="evidence/:caseId" element={<LegacyEvidenceRedirect />} />

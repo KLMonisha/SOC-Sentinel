@@ -53,16 +53,16 @@ Real `/api/analyze` and `/api/counterfactual` responses from the demo CSV (8 row
 | Analyst decision + audit history | ✅ 🧪 | Milestone B. Report page + Evidence Room "Decision" tab. Mock only (the mock keeps decisions in page memory, so a full reload resets them). |
 | Counterfactual Lab | ✅ 🧪 | Milestone C. Branch composition, validation, changed/unchanged verdicts, failures, integrity re-check. **Mock only.** No adapter to the real stateless `/api/counterfactual` by decision: waits for stable cases and events. |
 | Investigation Lab | ✅ 🧪 | Milestone D. Case picker, evidence planner, three-segment budget, execution stage, provenance ledger, before/after assessment, idempotent retries, all failure states. **Mock only** (scripted fixtures, labelled). |
-| Red Team Lab | ❌ | `Placeholder`. Client + mock exist. |
+| Red Team Lab | ✅ 🧪 | Milestone E. Three scenario modules, 1–10 trial configuration with exact-request review, indeterminate execution stage, baseline vs hardened comparison computed from returned trial records, trial inspector, citation integrity, partial/empty/error states. **Mock only** (hand-written fixtures, labelled, not measurements). |
 | End-to-end journeys A–E | ❌ | Journey A partial (upload → queue → evidence), mock only. |
 | Real-backend integration | ❌ | See §1. Blocked on Member 1 (events, envelope, cases, persistence). |
 | Demo datasets and walkthrough | ❌ | Demo CSV drafted (see below). |
 | Accessibility | 🟡 | Semantics and reduced motion present; no systematic audit. |
 | Performance | 🟡 | Bundle sizes known (Landing ≈ 940 kB lazy, app ≈ 810 kB); no profiling. |
-| Tests | ✅ | 253 passing after Milestone D (60 added: model, mock scenarios, mock/live isolation, Investigation Lab UI). |
+| Tests | ✅ | 315 passing after Milestone E (62 added: model, fixtures, lab UI, live-mode client). |
 
 ## 3. Completion estimate (Member 2 scope, honest)
-- **Overall: ≈ 70% after Milestone D (frontend complete for Counterfactual and Investigation, mock-tested only).** Remaining: Red Team Lab, exports and refinement, end-to-end journeys, demo and accessibility audit.
+- **Overall: ≈ 78% after Milestone E (frontend complete for Counterfactual, Investigation and Red Team, mock-tested only).** Remaining: exports and Evidence Room/report refinement (Milestone F), end-to-end journeys, demo datasets, accessibility audit, performance pass.
 - **Real-backend integration: 0%.** No agreed endpoint has been exercised successfully against the real backend. This number only moves when one has.
 
 ## 4. Working agreement for this phase
@@ -112,3 +112,26 @@ The Investigation Lab (`/app/investigation[/:caseId]`) runs **only against the d
 | 10 | Server-side request timeout expectation | The console gives up after 15 s and retries with the same key. |
 
 Mock-only in Milestone D: all candidate sets, retrieved events, assessment changes, the scripted failure/slow/exhausted cases (`case_inv_*`), and the placeholder hashes. The UI-owned "investigation question" wording per tool is a label, not backend data.
+
+## 8. Milestone E: Red Team Lab (`/app/red-team`), frontend state and backend dependencies
+
+**Implemented (mock-tested only):** scenario selection (native radio group; exactly the three agreed ids), 1–10 trial validation, exact request review (`{scenario_id, trials}` and nothing else), duplicate-submit guard, cancel, 90 s client timeout, indeterminate running state (no progress or percentages are drawn because the contract returns one final response), baseline vs hardened comparison, trial inspector, citation integrity indicators, and explicit empty, partial, error and inconsistent-response states. Every displayed count and rate is computed from `outputs[]`; `injection_successes` is only compared against them and flagged if it disagrees. Attacker-controlled text (payloads, outputs) is rendered as inert text in a visually distinct hatched style. Descriptive text (what each surface is, expected defence) is UI-owned and labelled "descriptive, not measured".
+
+**Mock-only:** every result. The fixtures in `api/mocks/redTeamScenarios.ts` are hand-written patterns (baseline fails/hardened resists; both resist; both fail; empty; partial; invalid or missing citations; 503 then success). They are selected by trial count because the request carries nothing else (map shown in the lab in mock mode). They are **not** measurements or benchmarks. Mock vs live isolation is covered by tests; live mode never falls back to fixtures.
+
+**Backend dependencies (none verified; `/api/adversarial/run` does not exist yet):**
+1. `POST /api/adversarial/run` with the agreed request and response shapes, `schema_version`, `request_id` and the error envelope; `trials` > 10 or < 1 returns 400.
+2. Real baseline and hardened pipelines returning actual `outputs[]` per trial (no derived percentages).
+3. An objective, documented rule for `injection_succeeded`.
+4. `citation_check` that adds up (`verified + rejected = total`) and a statement of what "total" counts.
+5. Run latency or a timeout statement (the UI assumes 90 s) and a statement of whether runs are synchronous.
+
+**New contract ambiguities found while building this screen** (added to the questions for Member 1):
+- **Per-trial citations:** the contract returns citation counts per pipeline only. The inspector can therefore show the pipeline totals but not "which citations in trial 3 were rejected". Request an optional `citations[{event_id, verified}]` on each output if wanted.
+- **Why a trial counted as a success:** only a boolean is returned; there is no per-trial evidence field. The inspector says so rather than inventing one.
+- **Partial results:** is `trials` the number requested, the number completed, or the number of records? What is returned if some trials error? The UI flags any difference between `trials` and `outputs.length`.
+- **Trial pairing:** are baseline and hardened trial `n` the same input? The UI aligns them by trial number and shows a missing one as "not returned".
+- **Payload provenance:** is `untrusted_payload` always an inert fixed string from the harness? The UI assumes so and renders it as text only.
+- **`settings`:** only `model` and `temperature` are typed; any other keys are shown as returned.
+- **Error codes:** no code list for this endpoint (the mock uses `ADVERSARIAL_RUN_FAILED`, 503); retries send a new independent request because there is no idempotency key.
+- **Scenario catalogue:** there is no endpoint listing scenarios, so titles, surfaces and expected defences shown before a run are UI-owned text.

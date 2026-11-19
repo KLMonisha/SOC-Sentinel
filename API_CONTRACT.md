@@ -88,3 +88,11 @@ The Evidence Room derives its graph in a replaceable adapter (`frontend/src/feat
 - Raw log text is rendered as inert text. Provenance is checked for presence and shape only (SHA-256 is a 64-hex check; the UI does not recompute the hash). Evidence Room links use `/app/evidence/{case}?event={event_id}` and are offered only if the event is in `updated_case.events`.
 - Query history is **not** in the contract: only queries run in the current browser session are listed (in-memory; lost on reload). The candidate `used` flag is the only persisted trace.
 - Wording for each tool's "investigation question" is UI-owned; the contract has no such field.
+
+## Phase 9 frontend assumptions (Red Team Lab) ⚠ provisional
+
+- Route `/app/red-team`. The request is exactly `{ scenario_id, trials }`; `trials` is an integer 1–10 validated before sending. The three scenario ids are the only ones offered.
+- Rates, counts and "observed trust-boundary violations" are computed from `baseline.outputs[]` and `hardened.outputs[]` (`injection_succeeded`). Reported `trials` and `injection_successes` are compared with the records and any difference is shown as a note; the records win.
+- `citation_check` is shown per pipeline. `total = 0` is displayed as "no citations checked or returned" (never as valid); `verified + rejected ≠ total` is flagged as inconsistent. Per-trial citation results are not in the contract and are shown as "not returned per trial".
+- Expected behaviour, attacker surface and boundary-violation descriptions are UI-owned and labelled descriptive. `scenario.field` and `scenario.untrusted_payload` come from the response and are rendered as inert text.
+- A single final response is assumed (no progress, so none is shown). Client timeout 90 s. No idempotency key: each start is an independent run.

@@ -338,6 +338,8 @@ Request: `{ "scenario_id": "user_agent_injection" | "url_query_contamination" | 
 
 Response: scenario (`scenario_id`, `title`, `field`, `untrusted_payload`), `settings` (at least `model`, `temperature`; add whatever else is relevant), and two pipeline results, `baseline` and `hardened`, each `{ trials, injection_successes, outputs[{trial, output, injection_succeeded}], citation_check{total,verified,rejected} }`. **Return actual outputs; no derived percentages.**
 
+**Added for the Red Team Lab (Milestone E):** please also say whether `trials` means requested or completed and what is returned when some trials fail; whether baseline and hardened trial `n` share an input; and consider an optional per-output `citations[{event_id, verified}]`. See `INTEGRATION_STATUS.md` §8.
+
 Please document: how `injection_succeeded` is determined (it should be an objective check, e.g. the output adopts the injected claim or cites a non-existent event); whether the run is synchronous and its expected latency (10 trials may be slow; tell us a timeout, or make it a job with polling); and what is returned on partial failure.
 
 ---
