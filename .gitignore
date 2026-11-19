@@ -5,6 +5,8 @@ __pycache__/
 venv/
 .venv/
 .env
+.env.*
+!.env.example
 
 # IDE
 .vscode/
@@ -20,3 +22,5 @@ Thumbs.db
 # Temporary files
 temp/
 tmp/
+# Supabase CLI local link state (project ref, pooler URL)
+supabase/.temp/
