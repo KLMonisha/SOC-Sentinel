@@ -1,0 +1,16 @@
+timestamp,username,ip,event,host,path,status,note
+2026-11-18T09:10:00Z,alice,198.51.100.7,failed_login,auth-01,,,
+2026-11-18T09:11:00Z,alice,198.51.100.7,failed_login,auth-01,,,
+2026-11-18T09:12:00Z,alice,198.51.100.7,failed_login,auth-01,,,
+2026-11-18T09:13:00Z,alice,198.51.100.7,failed_login,auth-01,,,
+2026-11-18T09:14:00Z,alice,198.51.100.7,failed_login,auth-01,,,
+2026-11-18T09:15:00Z,alice,198.51.100.7,failed_login,auth-01,,,
+2026-11-18T09:17:30Z,alice,198.51.100.7,login_success,auth-01,,,"first login after failures
+from a new network"
+2026-11-18T09:20:00Z,alice,198.51.100.7,,web-01,/admin/export,403,
+2026-11-18T09:21:00Z,alice,198.51.100.7,,web-01,/admin/export,403,
+2026-11-18T09:22:00Z,alice,198.51.100.7,,web-01,/admin/export,403,
+2026-11-18T09:23:00Z,alice,198.51.100.7,,web-01,/admin/export,403,
+2026-11-18T09:24:00Z,alice,198.51.100.7,,web-01,/admin/export,403,
+2026-11-18T09:30:00Z,bob,203.0.113.5,login_success,auth-01,,,
+not-a-time,carol,203.0.113.9,failed_login,auth-01,,,

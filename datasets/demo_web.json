@@ -1,0 +1,58 @@
+[
+  {
+    "time": "2026-11-18T11:00:00Z",
+    "user": "dwilson",
+    "source_ip": "192.0.2.77",
+    "path": "/api/v1/secret",
+    "status": 403,
+    "host": "web-02"
+  },
+  {
+    "time": "2026-11-18T11:01:00Z",
+    "user": "dwilson",
+    "source_ip": "192.0.2.77",
+    "path": "/api/v1/secret",
+    "status": 403,
+    "host": "web-02"
+  },
+  {
+    "time": "2026-11-18T11:02:00Z",
+    "user": "dwilson",
+    "source_ip": "192.0.2.77",
+    "path": "/api/v1/secret",
+    "status": 403,
+    "host": "web-02"
+  },
+  {
+    "time": "2026-11-18T11:03:00Z",
+    "user": "dwilson",
+    "source_ip": "192.0.2.77",
+    "path": "/api/v1/secret",
+    "status": 403,
+    "host": "web-02"
+  },
+  {
+    "time": "2026-11-18T11:04:00Z",
+    "user": "dwilson",
+    "source_ip": "192.0.2.77",
+    "path": "/api/v1/secret",
+    "status": 403,
+    "host": "web-02"
+  },
+  {
+    "time": "2026-11-18T11:05:00Z",
+    "user": "dwilson",
+    "source_ip": "192.0.2.77",
+    "path": "/api/v1/secret",
+    "status": 403,
+    "host": "web-02"
+  },
+  {
+    "time": "2026-11-18T11:10:00Z",
+    "user": "erin",
+    "source_ip": "192.0.2.80",
+    "path": "/home",
+    "status": 200,
+    "host": "web-02"
+  }
+]

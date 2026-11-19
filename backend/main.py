@@ -1,6 +1,10 @@
 from fastapi import FastAPI
-from app.api.routes import router
 
+from app.api.routes import router
+from app.api.cases import router as cases_router
+from dotenv import load_dotenv
+
+load_dotenv()
 app = FastAPI(
     title="SOC Sentinel",
     description="Security Alert Triage and Investigation System",
@@ -8,6 +12,7 @@ app = FastAPI(
 )
 
 app.include_router(router)
+app.include_router(cases_router)
 
 
 @app.get("/")

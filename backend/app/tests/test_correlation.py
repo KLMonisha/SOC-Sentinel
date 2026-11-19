@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from app.models.events import SecurityEvent
 from app.services.correlation import (
     calculate_risk_score,
-    correlate_alerts
+    correlate_alerts,
 )
 
 
@@ -14,6 +14,7 @@ BASE_TIME = datetime(2026, 11, 18, 10, 0, tzinfo=timezone.utc)
 def make_event(event_id, minutes, source_ip="192.168.1.10"):
     return SecurityEvent(
         event_id=event_id,
+        dataset_id="ds_test",
         timestamp=BASE_TIME + timedelta(minutes=minutes),
         event_type="authentication_failure",
         username="alice",
@@ -23,8 +24,10 @@ def make_event(event_id, minutes, source_ip="192.168.1.10"):
         resource="/admin",
         outcome="failure",
         source="test_logs.csv",
+        line_number=minutes + 1,
+        raw_text=f'{{"event_id":"{event_id}"}}',
         raw_hash="a" * 64,
-        raw_record={"test": event_id}
+        raw_record={"test": event_id},
     )
 
 
@@ -42,21 +45,15 @@ def make_alert(
         "severity": severity,
         "description": "Test description",
         "event_ids": event_ids,
-        "evidence": {
-            "source_ip": source_ip
-        }
+        "evidence": {"source_ip": source_ip},
     }
 
 
 def test_correlate_alerts_with_same_ip():
-    events = [
-        make_event("evt_1", 0),
-        make_event("evt_2", 5)
-    ]
-
+    events = [make_event("evt_1", 0), make_event("evt_2", 5)]
     alerts = [
         make_alert("alert_1", "DET-001", "high", ["evt_1"]),
-        make_alert("alert_2", "DET-002", "critical", ["evt_2"])
+        make_alert("alert_2", "DET-002", "critical", ["evt_2"]),
     ]
 
     incidents = correlate_alerts(alerts, events)
@@ -68,50 +65,34 @@ def test_correlate_alerts_with_same_ip():
 def test_different_ips_create_separate_incidents():
     events = [
         make_event("evt_1", 0, "192.168.1.10"),
-        make_event("evt_2", 5, "192.168.1.20")
+        make_event("evt_2", 5, "192.168.1.20"),
     ]
 
     alerts = [
-        make_alert(
-            "alert_1", "DET-001", "high", ["evt_1"],
-            "192.168.1.10"
-        ),
-        make_alert(
-            "alert_2", "DET-001", "high", ["evt_2"],
-            "192.168.1.20"
-        )
+        make_alert("alert_1", "DET-001", "high", ["evt_1"], "192.168.1.10"),
+        make_alert("alert_2", "DET-001", "high", ["evt_2"], "192.168.1.20"),
     ]
 
     incidents = correlate_alerts(alerts, events)
-
     assert len(incidents) == 2
 
 
 def test_alerts_outside_window_create_separate_incidents():
-    events = [
-        make_event("evt_1", 0),
-        make_event("evt_2", 45)
-    ]
-
+    events = [make_event("evt_1", 0), make_event("evt_2", 45)]
     alerts = [
         make_alert("alert_1", "DET-001", "high", ["evt_1"]),
-        make_alert("alert_2", "DET-002", "high", ["evt_2"])
+        make_alert("alert_2", "DET-002", "high", ["evt_2"]),
     ]
 
     incidents = correlate_alerts(alerts, events, window_minutes=30)
-
     assert len(incidents) == 2
 
 
 def test_incident_contains_traceable_ids():
-    events = [
-        make_event("evt_1", 0),
-        make_event("evt_2", 5)
-    ]
-
+    events = [make_event("evt_1", 0), make_event("evt_2", 5)]
     alerts = [
         make_alert("alert_1", "DET-001", "high", ["evt_1"]),
-        make_alert("alert_2", "DET-002", "critical", ["evt_2"])
+        make_alert("alert_2", "DET-002", "critical", ["evt_2"]),
     ]
 
     incident = correlate_alerts(alerts, events)[0]
@@ -121,9 +102,7 @@ def test_incident_contains_traceable_ids():
 
 
 def test_critical_alert_produces_high_risk_score():
-    alerts = [
-        make_alert("alert_1", "DET-002", "critical", ["evt_1"])
-    ]
+    alerts = [make_alert("alert_1", "DET-002", "critical", ["evt_1"])]
 
     result = calculate_risk_score(alerts)
 
@@ -132,13 +111,10 @@ def test_critical_alert_produces_high_risk_score():
 
 
 def test_multiple_rules_increase_risk_score():
-    one_rule = [
-        make_alert("alert_1", "DET-001", "high", ["evt_1"])
-    ]
-
+    one_rule = [make_alert("alert_1", "DET-001", "high", ["evt_1"])]
     two_rules = [
         make_alert("alert_1", "DET-001", "high", ["evt_1"]),
-        make_alert("alert_2", "DET-002", "high", ["evt_2"])
+        make_alert("alert_2", "DET-002", "high", ["evt_2"]),
     ]
 
     first_score = calculate_risk_score(one_rule)["score"]
@@ -149,17 +125,11 @@ def test_multiple_rules_increase_risk_score():
 
 def test_risk_score_never_exceeds_100():
     alerts = [
-        make_alert(
-            f"alert_{i}",
-            f"DET-{i:03}",
-            "critical",
-            [f"evt_{i}"]
-        )
+        make_alert(f"alert_{i}", f"DET-{i:03}", "critical", [f"evt_{i}"])
         for i in range(20)
     ]
 
     result = calculate_risk_score(alerts)
-
     assert result["score"] <= 100
 
 
@@ -172,9 +142,7 @@ def test_empty_alerts_return_zero_score():
 
 def test_incident_ids_are_deterministic():
     events = [make_event("evt_1", 0)]
-    alerts = [
-        make_alert("alert_1", "DET-001", "high", ["evt_1"])
-    ]
+    alerts = [make_alert("alert_1", "DET-001", "high", ["evt_1"])]
 
     first = correlate_alerts(alerts, events)
     second = correlate_alerts(alerts, events)
