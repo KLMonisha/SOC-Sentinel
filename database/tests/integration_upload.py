@@ -26,6 +26,7 @@ def check(name: str, ok: bool, detail: str = "") -> None:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--pg-bin")
+    ap.add_argument("--live-groq", action="store_true", help="make ONE real Groq call (sends derived findings of the synthetic demo case)")
     args = ap.parse_args()
     cluster = rt.Cluster(rt.find_pg_bin(args.pg_bin), keep=False)
     try:
@@ -100,6 +101,58 @@ def main() -> int:
                 rp2 = client.get(f"/api/cases/{summary['case_id']}/report")
                 n_rep = cluster.psql("soc_fresh", f"SELECT count(*) FROM soc.reports WHERE case_id='{summary['case_id']}'", user="postgres").stdout.strip()
                 check(f"{summary['case_id']}: second GET reuses the stored report", n_rep == "1" and rp2.json()["claims"] == cl, n_rep)
+
+        # ---- LLM-assisted report (fake model unless --live-groq); template reports must stay immutable
+        from app.services import llm_reporting
+        cid = cases[0]["case_id"]
+        count = lambda: int(cluster.psql("soc_fresh", f"SELECT count(*) FROM soc.reports WHERE case_id='{cid}'", user="postgres").stdout.strip())
+        tmpl = client.get(f"/api/cases/{cid}/report").json()
+        n0 = count()
+        os.environ["LLM_REPORTS_ENABLED"] = "false"
+        r0 = client.post(f"/api/cases/{cid}/report/llm")
+        check("LLM endpoint disabled by default -> 403, nothing stored", r0.status_code == 403 and r0.json()["error"]["code"] == "LLM_REPORTS_DISABLED" and count() == n0)
+        os.environ["LLM_REPORTS_ENABLED"] = "true"
+        real_narrate = llm_reporting.generate_llm_narrative
+
+        def fake(mode):
+            def f(report):
+                if mode == "fail":
+                    return {**report, "llm_status": "fallback", "llm_error": "RateLimitError: simulated"}
+                inc = report["incidents"][0]["incident_id"]
+                ex = "Explained. See 203.0.113.99." if mode == "ip" else "Explained."
+                return {**report, "llm_status": "success", "llm_narrative": {
+                    "executive_summary": ex, "incident_explanations": [{"incident_id": inc, "explanation": "Case."}],
+                    "claim_explanations": [{"claim_index": i, "explanation": ex} for i in range(len(report["claims"]))]}}
+            return f
+
+        for mode, code in (("fail", "LLM_UNAVAILABLE"), ("ip", "LLM_OUTPUT_REJECTED")):
+            llm_reporting.generate_llm_narrative = fake(mode)
+            rr = client.post(f"/api/cases/{cid}/report/llm")
+            check(f"LLM {mode}: 502 {code}, nothing stored, template still current",
+                  rr.status_code == 502 and rr.json()["error"]["code"] == code and count() == n0 and client.get(f"/api/cases/{cid}/report").json()["generated_by"] == "template_fallback", rr.text[:200])
+        llm_reporting.generate_llm_narrative = fake("ok")
+        ok = client.post(f"/api/cases/{cid}/report/llm")
+        check("LLM ok: 200 generated_by llm", ok.status_code == 200 and ok.json()["generated_by"] == "llm", ok.text[:200])
+        if ok.status_code == 200:
+            oj = ok.json()
+            check("LLM ok: new row appended, template row kept (immutable)", count() == n0 + 1)
+            check("LLM ok: citations and verified flags identical to template",
+                  [(c["citations"], c["verified"]) for c in oj["claims"]] == [(c["citations"], c["verified"]) for c in tmpl["claims"]] and oj["citation_check"] == tmpl["citation_check"])
+            check("LLM ok: AI text labelled", oj["summary"].startswith("AI-generated summary") and all("AI-generated explanation" in c["text"] for c in oj["claims"]))
+            check("LLM ok: GET now serves the newest (llm) report", client.get(f"/api/cases/{cid}/report").json()["generated_by"] == "llm")
+        if args.live_groq:
+            llm_reporting.generate_llm_narrative = real_narrate
+            n1 = count()
+            live = client.post(f"/api/cases/{cid}/report/llm")
+            check("LIVE Groq: 200 generated_by llm", live.status_code == 200 and live.json()["generated_by"] == "llm", live.text[:300])
+            if live.status_code == 200:
+                lj = live.json()
+                check("LIVE Groq: new row appended", count() == n1 + 1)
+                check("LIVE Groq: citations/verified unchanged vs template",
+                      [(c["citations"], c["verified"]) for c in lj["claims"]] == [(c["citations"], c["verified"]) for c in tmpl["claims"]])
+                print("LIVE summary:", lj["summary"][:700].replace(chr(10), " "))
+                print("LIVE claim 1:", lj["claims"][0]["text"][:700].replace(chr(10), " "))
+        llm_reporting.generate_llm_narrative = real_narrate
 
         miss = client.get("/api/cases/case_doesnotexist")
         check("unknown case -> 404 CASE_NOT_FOUND", miss.status_code == 404 and miss.json()["error"]["code"] == "CASE_NOT_FOUND")

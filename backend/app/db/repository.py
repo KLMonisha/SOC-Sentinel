@@ -139,12 +139,12 @@ def insert_report(conn: Connection, case_id: str, dataset_id: str, assessment_id
     where every claim has text, verified, verification_note, citations[] and resolved: set of citation ids found in the case."""
     report_id = conn.execute(text(
         "INSERT INTO soc.reports (case_id, assessment_id, generated_by, summary, verdict_rationale, "
-        "missing_information, citation_total, citation_verified, citation_rejected, fallback_reason, request_id) "
-        "VALUES (:c, :a, :g, :s, :v, :m, :t, :ver, :rej, :fb, :r) RETURNING report_id"),
+        "missing_information, citation_total, citation_verified, citation_rejected, fallback_reason, request_id, llm_model) "
+        "VALUES (:c, :a, :g, :s, :v, :m, :t, :ver, :rej, :fb, :r, :lm) RETURNING report_id"),
         {"c": case_id, "a": assessment_id, "g": rep["generated_by"], "s": rep["summary"],
          "v": rep["verdict_rationale"], "m": rep["missing_information"], "t": rep["counts"]["total"],
          "ver": rep["counts"]["verified"], "rej": rep["counts"]["rejected"], "fb": rep["fallback_reason"],
-         "r": request_id}).scalar_one()
+         "r": request_id, "lm": rep.get("llm_model")}).scalar_one()
     for i, cl in enumerate(rep["claims"], start=1):
         cid = f"claim_{i}"
         conn.execute(text("INSERT INTO soc.report_claims (report_id, claim_id, ordinal, text, verified, "

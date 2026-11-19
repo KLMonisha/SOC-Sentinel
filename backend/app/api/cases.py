@@ -222,3 +222,31 @@ def get_report(case_id: str):
             "missing_information": list(stored["missing_information"]),
             "citation_check": {"total": stored["citation_total"], "verified": stored["citation_verified"],
                                "rejected": stored["citation_rejected"]}}
+
+
+@router.post("/cases/{case_id}/report/llm")
+def create_llm_report(case_id: str):
+    """Explicit, opt-in: sends DERIVED findings (not raw logs) to Groq, then stores a NEW append-only report.
+    Disabled unless LLM_REPORTS_ENABLED=true. On any failure nothing is stored and the template report stays current."""
+    from app.services import llm_report_service as svc
+
+    rid = _rid()
+    if not svc.enabled():
+        return _err(403, "LLM_REPORTS_DISABLED", "LLM reports are disabled (LLM_REPORTS_ENABLED is not true).", rid)
+    try:
+        with get_engine().connect() as conn:
+            r = repo.get_case_row(conn, case_id)
+            if not r:
+                return _err(404, "CASE_NOT_FOUND", f"No case {case_id}.", rid)
+            events = repo.case_events(conn, case_id)
+            findings, _attack, missing, _dec = repo.case_children(conn, case_id, r["assessment_id"])
+        # no database transaction is held open while waiting for the model
+        try:
+            rep = svc.build_llm_report(case_id, r, events, findings, missing)
+        except svc.LlmReportRejected as exc:
+            return _err(502, exc.code, exc.message, rid)
+        with get_engine().begin() as conn:
+            repo.insert_report(conn, case_id, r["dataset_id"], r["assessment_id"], rep, rid)
+    except (DatabaseNotConfigured, DBAPIError) as exc:
+        return _db_err(exc, rid)
+    return get_report(case_id)
