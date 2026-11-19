@@ -125,3 +125,45 @@ def quarantine_rows(conn: Connection, dataset_id: str):
 
 def dataset_row(conn: Connection, dataset_id: str):
     return conn.execute(text("SELECT * FROM soc.datasets WHERE dataset_id = :d"), {"d": dataset_id}).mappings().first()
+
+
+# ----------------------------------------------------------------- reports
+def latest_report_for_assessment(conn: Connection, case_id: str, assessment_id):
+    return conn.execute(text("SELECT * FROM soc.reports WHERE case_id = :c AND assessment_id = :a "
+                             "ORDER BY created_at DESC, report_id DESC LIMIT 1"),
+                        {"c": case_id, "a": assessment_id}).mappings().first()
+
+
+def insert_report(conn: Connection, case_id: str, dataset_id: str, assessment_id, rep: dict, request_id: str) -> str:
+    """rep: summary, verdict_rationale, missing_information[], generated_by, fallback_reason, counts, claims[]
+    where every claim has text, verified, verification_note, citations[] and resolved: set of citation ids found in the case."""
+    report_id = conn.execute(text(
+        "INSERT INTO soc.reports (case_id, assessment_id, generated_by, summary, verdict_rationale, "
+        "missing_information, citation_total, citation_verified, citation_rejected, fallback_reason, request_id) "
+        "VALUES (:c, :a, :g, :s, :v, :m, :t, :ver, :rej, :fb, :r) RETURNING report_id"),
+        {"c": case_id, "a": assessment_id, "g": rep["generated_by"], "s": rep["summary"],
+         "v": rep["verdict_rationale"], "m": rep["missing_information"], "t": rep["counts"]["total"],
+         "ver": rep["counts"]["verified"], "rej": rep["counts"]["rejected"], "fb": rep["fallback_reason"],
+         "r": request_id}).scalar_one()
+    for i, cl in enumerate(rep["claims"], start=1):
+        cid = f"claim_{i}"
+        conn.execute(text("INSERT INTO soc.report_claims (report_id, claim_id, ordinal, text, verified, "
+                          "verification_note) VALUES (:r, :c, :o, :t, :v, :n)"),
+                     {"r": report_id, "c": cid, "o": i, "t": cl["text"], "v": cl["verified"],
+                      "n": cl["verification_note"]})
+        if cl["citations"]:
+            conn.execute(text("INSERT INTO soc.report_claim_citations (report_id, claim_id, case_id, ordinal, "
+                              "cited_event_id, resolved_dataset_id) VALUES (:r, :c, :case, :o, :e, :d)"),
+                         [{"r": report_id, "c": cid, "case": case_id, "o": j, "e": ev,
+                           "d": dataset_id if ev in cl["resolved"] else None}
+                          for j, ev in enumerate(cl["citations"], start=1)])
+    return report_id
+
+
+def report_with_claims(conn: Connection, report_id: str):
+    claims = conn.execute(text(
+        "SELECT c.claim_id, c.text, c.verified, c.verification_note, "
+        "coalesce((SELECT array_agg(x.cited_event_id ORDER BY x.ordinal) FROM soc.report_claim_citations x "
+        "WHERE x.report_id = c.report_id AND x.claim_id = c.claim_id), '{}') AS citations "
+        "FROM soc.report_claims c WHERE c.report_id = :r ORDER BY c.ordinal"), {"r": report_id}).mappings().all()
+    return claims

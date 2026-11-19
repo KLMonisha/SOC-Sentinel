@@ -168,3 +168,57 @@ def get_case(case_id: str):
             "decisions": [{"decision_id": d["decision_id"], "case_id": d["case_id"], "decision": d["decision"],
                            "analyst_id": d["analyst_id"], "note": d["note"], "decided_at": _ts(d["decided_at"]),
                            "dry_run": True} for d in decisions]}
+
+
+@router.get("/cases/{case_id}/report")
+def get_report(case_id: str):
+    """Report for the case's CURRENT assessment. Built once from the persisted findings and events with the
+    backend's deterministic generator (no language model), stored append-only, then served from storage."""
+    from types import SimpleNamespace
+    from app.services.reporting import generate_investigation_report
+
+    rid = _rid()
+    try:
+        with get_engine().begin() as conn:
+            r = repo.get_case_row(conn, case_id)
+            if not r:
+                return _err(404, "CASE_NOT_FOUND", f"No case {case_id}.", rid)
+            stored = repo.latest_report_for_assessment(conn, case_id, r["assessment_id"])
+            if stored is None:
+                events = repo.case_events(conn, case_id)
+                findings, _attack, missing, _dec = repo.case_children(conn, case_id, r["assessment_id"])
+                event_ids = [e["event_id"] for e in events]
+                alerts = [{"alert_id": f["finding_id"], "rule_id": f["rule_id"], "title": f["title"],
+                           "description": f["description"], "severity": f["severity"], "stance": f["stance"],
+                           "weight": _num(f["weight"]), "event_ids": list(f["event_ids"])} for f in findings]
+                incident = {"case_id": case_id, "event_ids": event_ids, "alert_count": len(alerts),
+                            "risk_score": r["risk_value"], "severity": r["severity"]}
+                coverage = {"dimensions_missing": list(r["coverage_missing"])}
+                built = generate_investigation_report([SimpleNamespace(event_id=i) for i in event_ids],
+                                                      alerts, [incident], coverage)
+                in_case = set(event_ids)
+                claims = []
+                for c in built["claims"]:
+                    text_ = c["text"] if c["type"] != "detection_finding" else f"{c['title']}: {c['text']}"
+                    claims.append({"text": text_, "verified": c["verified"],
+                                   "verification_note": c["verification_note"], "citations": list(c["citations"]),
+                                   "resolved": {i for i in c["citations"] if i in in_case}})
+                rep = {"generated_by": built["generated_by"], "fallback_reason": built["fallback_reason"],
+                       "summary": built["executive_summary"], "verdict_rationale": r["verdict_rationale"],
+                       "missing_information": [m["telemetry"] for m in missing],
+                       "counts": built["citation_counts"], "claims": claims}
+                report_id = repo.insert_report(conn, case_id, r["dataset_id"], r["assessment_id"], rep, rid)
+                stored = repo.latest_report_for_assessment(conn, case_id, r["assessment_id"])
+                assert stored["report_id"] == report_id
+            claims = repo.report_with_claims(conn, stored["report_id"])
+    except (DatabaseNotConfigured, DBAPIError) as exc:
+        return _db_err(exc, rid)
+
+    return {"schema_version": SCHEMA_VERSION, "request_id": rid, "case_id": case_id,
+            "generated_by": stored["generated_by"], "summary": stored["summary"],
+            "verdict_rationale": stored["verdict_rationale"],
+            "claims": [{"claim_id": c["claim_id"], "text": c["text"], "citations": list(c["citations"]),
+                        "verified": c["verified"], "verification_note": c["verification_note"]} for c in claims],
+            "missing_information": list(stored["missing_information"]),
+            "citation_check": {"total": stored["citation_total"], "verified": stored["citation_verified"],
+                               "rejected": stored["citation_rejected"]}}

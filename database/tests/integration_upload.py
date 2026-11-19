@@ -85,8 +85,27 @@ def main() -> int:
                   all(e["event_id"] == rt.derive_event_id(j["summary"]["dataset_id"], e["source_file"], e["line_number"], e["raw_hash"]) for e in j["events"]))
             check(f"{summary['case_id']}: status open, budget 3", j["summary"]["status"] == "open" and j["planner"]["budget_remaining"] == 3)
 
+            rp = client.get(f"/api/cases/{summary['case_id']}/report")
+            check(f"{summary['case_id']}: GET report -> 200", rp.status_code == 200, rp.text[:300])
+            if rp.status_code == 200:
+                rj = rp.json()
+                cl = rj["claims"]
+                cc = rj["citation_check"]
+                check(f"{summary['case_id']}: report envelope and method", rj["schema_version"] == "1.0" and rj["case_id"] == summary["case_id"] and rj["generated_by"] == "template_fallback")
+                check(f"{summary['case_id']}: one claim per finding plus the case assessment", len(cl) == len(j["findings"]) + 1, f"{len(cl)} vs {len(j['findings'])}")
+                check(f"{summary['case_id']}: every claim cites real case events", all(c["citations"] and set(c["citations"]) <= ids for c in cl))
+                check(f"{summary['case_id']}: verified flags and counts consistent",
+                      cc["verified"] == sum(c["verified"] for c in cl) and cc["verified"] + cc["rejected"] == cc["total"] == len(cl))
+                check(f"{summary['case_id']}: missing information from stored missing evidence", rj["missing_information"] == [m["telemetry"] for m in j["missing_evidence"]])
+                rp2 = client.get(f"/api/cases/{summary['case_id']}/report")
+                n_rep = cluster.psql("soc_fresh", f"SELECT count(*) FROM soc.reports WHERE case_id='{summary['case_id']}'", user="postgres").stdout.strip()
+                check(f"{summary['case_id']}: second GET reuses the stored report", n_rep == "1" and rp2.json()["claims"] == cl, n_rep)
+
         miss = client.get("/api/cases/case_doesnotexist")
         check("unknown case -> 404 CASE_NOT_FOUND", miss.status_code == 404 and miss.json()["error"]["code"] == "CASE_NOT_FOUND")
+
+        nr = client.get("/api/cases/case_doesnotexist/report")
+        check("report for unknown case -> 404", nr.status_code == 404 and nr.json()["error"]["code"] == "CASE_NOT_FOUND")
 
         bad = client.post("/api/upload", files={"file": ("x.txt", b"hello")})
         check("unsupported format -> 400", bad.status_code == 400 and bad.json()["error"]["code"] == "UNSUPPORTED_FORMAT")
