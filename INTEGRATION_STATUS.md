@@ -48,7 +48,7 @@ Real `/api/analyze` and `/api/counterfactual` responses from the demo CSV (8 row
 | Design tokens and primitives | ✅ | |
 | Typed API client, errors, schema check, idempotency key, mock isolation | ✅ 🧪 | 8 operations typed; **never run against the real backend**. |
 | Command Center (upload, Case Field, queue) | ✅ 🧪 | Real UI; data from mocks only. |
-| Evidence Room: graph, list, inspector, replay, focus, provenance | 🟡 🧪 | Functional and tested (mocked renderer); **visual composition predates the redesign** (nested panels, small labels). Browser-verified earlier only at one width. |
+| Evidence Room: graph, list, inspector, replay, focus, provenance | ✅ 🧪 | Core since Phase 5; **visually rebuilt in F1** (full-bleed graph, flat header, transport-style replay, hairline panels, provenance-complete indicator, Export tab). Behaviour unchanged; tested with mocks only. |
 | Report page + citation navigation | ✅ 🧪 | Milestone B. Browser-verified against the mock only. |
 | Analyst decision + audit history | ✅ 🧪 | Milestone B. Report page + Evidence Room "Decision" tab. Mock only (the mock keeps decisions in page memory, so a full reload resets them). |
 | Counterfactual Lab | ✅ 🧪 | Milestone C. Branch composition, validation, changed/unchanged verdicts, failures, integrity re-check. **Mock only.** No adapter to the real stateless `/api/counterfactual` by decision: waits for stable cases and events. |
@@ -59,10 +59,10 @@ Real `/api/analyze` and `/api/counterfactual` responses from the demo CSV (8 row
 | Demo datasets and walkthrough | ❌ | Demo CSV drafted (see below). |
 | Accessibility | 🟡 | Semantics and reduced motion present; no systematic audit. |
 | Performance | 🟡 | Bundle sizes known (Landing ≈ 940 kB lazy, app ≈ 810 kB); no profiling. |
-| Tests | ✅ | 315 passing after Milestone E (62 added: model, fixtures, lab UI, live-mode client). |
+| Tests | ✅ | 372 passing after Milestone F1 (57 added: CSV, report model, PDF, graph PNG, export UI, config). |
 
 ## 3. Completion estimate (Member 2 scope, honest)
-- **Overall: ≈ 78% after Milestone E (frontend complete for Counterfactual, Investigation and Red Team, mock-tested only).** Remaining: exports and Evidence Room/report refinement (Milestone F), end-to-end journeys, demo datasets, accessibility audit, performance pass.
+- **Overall: ≈ 88% after Milestone F1 (frontend feature-complete against the mock contract; exports and Evidence Room refinement done).** Remaining: end-to-end journeys and demo datasets, accessibility audit, performance pass, optional ZIP package. Real-backend work is outside Member 2 until Member 1 delivers the endpoints.
 - **Real-backend integration: 0%.** No agreed endpoint has been exercised successfully against the real backend. This number only moves when one has.
 
 ## 4. Working agreement for this phase
@@ -77,9 +77,9 @@ Real `/api/analyze` and `/api/counterfactual` responses from the demo CSV (8 row
 4. Add the planner (`investigate`, idempotency key, budget 3) and `adversarial/run` (trials ≤ 10).
 5. Confirm open contract items 1–12 in `API_CONTRACT.md`.
 
-## 6. Scheduled frontend backlog: exports (Phase 6, deferred by decision on 2026-11-19)
+## 6. Frontend exports: implemented in Milestone F1 (see §9)
 
-Not started. To be done with the reporting / Evidence Room refinement work (Milestone F), not during Milestone C.
+The exports scheduled here (PDF report, events/findings CSV, graph PNG) are built. The combined ZIP package with manifest and SHA-256 checksums is the only item still deferred.
 
 | Export | Notes |
 |---|---|
@@ -135,3 +135,23 @@ Mock-only in Milestone D: all candidate sets, retrieved events, assessment chang
 - **`settings`:** only `model` and `temperature` are typed; any other keys are shown as returned.
 - **Error codes:** no code list for this endpoint (the mock uses `ADVERSARIAL_RUN_FAILED`, 503); retries send a new independent request because there is no idempotency key.
 - **Scenario catalogue:** there is no endpoint listing scenarios, so titles, surfaces and expected defences shown before a run are UI-owned text.
+
+## 9. Milestone F1: Evidence Room refinement and investigation exports
+
+**Implemented (all client-side, from stored case/report data; mock-tested only):**
+- **Evidence Room:** rebuilt to the shell's visual language: full-bleed graph stage, flat architectural header with one instrument line of metrics, transport-style replay controls, hairline panels instead of nested boxes, provenance-complete / incomplete indicator in the Inspector, new Export tab. Graph, replay, focus, event deep links, citation navigation and the keyboard list fallback are unchanged. The 3D room remains deferred.
+- **PDF report** (jsPDF, loaded on demand; real selectable text): branding, case ID and generation time, executive summary, verdict / risk / confidence / coverage as separate fields, supporting and contradicting findings, inferred and missing relationships, limitations, ATT&CK, chronology with source file:line, claims marked VERIFIED / NOT VERIFIED with unresolved citations flagged, dry-run containment, analyst audit, generation method, and an appendix quoting every source event with its SHA-256. Counterfactual and investigation sections appear **only** if they ran in this browser session. Mock reports carry a banner and a diagonal watermark on every page. Log text is escaped (`\xNN`, `\uNNNN`) so hidden or bidi characters cannot disguise content.
+- **CSV** (events, findings, decision audit): explicit headers, deterministic order, stable IDs and provenance, `data_source` column, `missing_fields` column (null is kept, not dropped), formula-injection neutralisation (leading `= + - @ TAB CR` get an apostrophe), every field quoted, UTF-8 BOM.
+- **Graph PNG:** drawn from the same normalised graph and layout as the on-screen view (not a screenshot), so it always covers the whole graph regardless of viewport, replay or zoom. Includes labels, legend, case ID, export time and source label; scale is capped by side length and pixel count and refused with a reason if the graph is too large.
+- **Export interface** on the Report page (section 11) and in the Evidence Room (Export tab and header action): filename pattern, format, availability, disabled-with-reason states, results and errors announced, duplicate-click guard. Mock files are prefixed `DEVFIXTURE_`.
+- **Red Team follow-ups:** adversarial timeout is configurable (`VITE_REDTEAM_TIMEOUT_MS`, 1000–600000, default 90000); the earlier browser-test selector was corrected and the check passes.
+
+**Found and fixed while verifying the real files:** the PDF watermark was clipped at both ends of the page, and table cells split ordinary words mid-word (both fixed; the watermark has a geometry test). The PNG watermark was clipped and is now sized from its measured width.
+
+**Not done / limitations:**
+- Combined ZIP package with manifest and checksums: deferred.
+- The PDF uses standard Helvetica/Courier (Latin-1). Non-Latin-1 characters are shown as visible escapes, not glyphs.
+- The PNG is a faithful redraw of the model, not a pixel capture of React Flow, so styling is very close but not identical.
+- Session-only content (counterfactual run, investigation queries) is in memory and is lost on reload; the API stores neither.
+- No PDF/CSV/PNG came from a real backend case. Bundle: the main chunk grew to ≈ 993 kB; jsPDF (≈ 399 kB) loads only when a PDF is requested.
+- No new backend endpoint was requested or created. Real-backend integration remains 0%.

@@ -27,3 +27,7 @@
 @media (max-width: 640px) { .ctx-bar { padding: 0 14px; } }
 .ctx-bar::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: linear-gradient(90deg, rgba(99, 235, 216, 0.2), rgba(99, 235, 216, 0.04) 60%, transparent); }
 .page-stage { position: relative; z-index: 2; }
+
+/* ============ Evidence Room: full-bleed graph stage ============ */
+.room-graph { background: radial-gradient(70% 90% at 50% 45%, rgba(26, 49, 41, 0.55), rgba(4, 10, 9, 0.9) 70%), var(--color-bg); }
+.room-stage { background: var(--color-bg); }

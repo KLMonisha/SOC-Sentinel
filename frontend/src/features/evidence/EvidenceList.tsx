@@ -14,9 +14,9 @@ export function EvidenceList() {
     <div className="space-y-5" data-testid="evidence-list">
       <section aria-labelledby="ev-h">
         <h3 id="ev-h" className="mb-1 text-[11px] uppercase tracking-wide text-ink-faint">Source events ({events.length})</h3>
-        <div className="max-h-64 overflow-auto border border-line">
+        <div className="max-h-64 overflow-auto border-y border-line/70">
           <table className="w-full text-left text-[12px]">
-            <thead className="sticky top-0 bg-surface text-[10px] uppercase tracking-wide text-ink-faint">
+            <thead className="sticky top-0 bg-bg text-[10px] uppercase tracking-wide text-ink-faint">
               <tr><th className="px-2 py-1.5">Time</th><th>Event</th><th>Type</th><th>User</th><th>IP</th><th>Host</th></tr>
             </thead>
             <tbody>
@@ -42,7 +42,7 @@ export function EvidenceList() {
 
       <section aria-labelledby="rel-h">
         <h3 id="rel-h" className="mb-1 text-[11px] uppercase tracking-wide text-ink-faint">Relationships ({graph.edges.length})</h3>
-        <ul className="max-h-64 divide-y divide-line/60 overflow-auto border border-line text-[12px]">
+        <ul className="max-h-64 divide-y divide-line/60 overflow-auto border-y border-line/70 text-[12px]">
           {graph.edges.map((e) => (
             <li key={e.id} aria-current={selEdge === e.id}>
               <button type="button" onClick={() => dispatch({ type: "select", selection: { kind: "edge", id: e.id } })}
@@ -60,7 +60,7 @@ export function EvidenceList() {
       {graph.nodes.some((n) => n.kind === "finding" || n.kind === "missing") && (
         <section aria-labelledby="fm-h">
           <h3 id="fm-h" className="mb-1 text-[11px] uppercase tracking-wide text-ink-faint">Findings and missing telemetry</h3>
-          <ul className="divide-y divide-line/60 border border-line text-[12px]">
+          <ul className="divide-y divide-line/60 border-y border-line/70 text-[12px]">
             {graph.nodes.filter((n) => n.kind === "finding" || n.kind === "missing").map((n) => (
               <li key={n.id}>
                 <button type="button" onClick={() => selectNode(n.id)}

@@ -21,7 +21,7 @@ function Section({ title, count, children }: { title: string; count?: number; ch
 function FindingRow({ f }: { f: Finding }) {
   const { selectNode } = useInvestigation();
   return (
-    <li className="border border-line p-2.5">
+    <li className={`border-l-2 py-1 pl-3 ${f.stance === "contradicting" ? "border-ink-faint" : "border-suspicious"}`}>
       <div className="flex items-start justify-between gap-2">
         <button type="button" onClick={() => selectNode(`finding:${f.finding_id}`)} className="text-left text-[13px] underline-offset-2 hover:underline">
           {f.title}
@@ -88,7 +88,7 @@ export function AnalysisPanel() {
         {c.missing_evidence.length === 0 ? <p className="text-[12px] text-ink-muted">None reported.</p> : (
           <ul className="space-y-2">
             {c.missing_evidence.map((m) => (
-              <li key={m.missing_id} className="border border-dashed border-missing/60 p-2.5 text-[12px]">
+              <li key={m.missing_id} className="border-l border-dashed border-missing py-1 pl-3 text-[12px]">
                 <div className="flex items-center gap-2"><EvidenceBadge state="missing" /><span>{m.telemetry}</span></div>
                 <p className="mt-1 text-ink-muted">{m.why_it_matters}</p>
               </li>

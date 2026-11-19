@@ -9,6 +9,7 @@ import { DisplayTitle } from "@/components/ui/DisplayTitle";
 import { Readout } from "@/components/ui/Readout";
 import { Surface } from "@/components/ui/Surface";
 import { DecisionPanel, DRY_RUN_BANNER } from "@/features/decision/DecisionPanel";
+import { ExportPanel } from "@/features/export/ExportPanel";
 import { orderEvents } from "@/features/evidence/model/graphModel";
 import { CitationChip } from "@/features/report/CitationChip";
 import { evidencePath, resolveCitations } from "@/features/report/citations";
@@ -31,6 +32,7 @@ const SECTIONS = [
   ["containment", "Containment"],
   ["claims", "Claims and citations"],
   ["decision", "Analyst decision and audit"],
+  ["export", "Export investigation"],
 ] as const;
 
 function Section({ id, n, title, children }: { id: string; n: number; title: string; children: React.ReactNode }) {
@@ -145,6 +147,7 @@ export function ReportPage() {
           )}
           {config.useMocks && <Chip dashed title="This report comes from the in-app development mock.">Development fixture · not a real analysis</Chip>}
           <Chip title="Containment is always a dry run.">Dry run only</Chip>
+          <a href="#export" className="inline-flex items-center gap-2 border border-verified/50 px-3 py-1 font-mono text-[11px] uppercase tracking-[0.12em] text-verified hover:bg-verified/10">Export ↓</a>
         </div>
       </header>
 
@@ -293,6 +296,11 @@ export function ReportPage() {
             <Link to={evidencePath(s.case_id)} className="mt-8 inline-flex items-center gap-2 text-[12px] uppercase tracking-[0.16em] text-verified hover:underline">
               Back to the Evidence Room <ArrowUpRight size={13} aria-hidden />
             </Link>
+          </Section>
+
+          <Section id="export" n={11} title="Export investigation">
+            <p className="mb-6 max-w-[68ch] text-[14px] leading-relaxed text-ink-muted">Download this case as professional, evidence-grounded artifacts. Each file is produced in your browser from the stored case and report; nothing is sent anywhere.</p>
+            <ExportPanel detail={c} getReport={async () => report} />
           </Section>
         </article>
       </div>

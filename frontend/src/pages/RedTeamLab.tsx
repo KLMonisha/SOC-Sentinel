@@ -10,7 +10,7 @@ import { buildRequest, MAX_TRIALS, MIN_TRIALS, parseTrials, reviewRun, SCENARIOS
 import "@/features/redteam/redteam.css";
 import { config } from "@/lib/config";
 
-export const RED_TEAM_TIMEOUT_MS = 90_000;
+export const RED_TEAM_TIMEOUT_MS = 90_000; // fallback only; the configured value is config.redTeamTimeoutMs
 
 type Run =
   | { kind: "idle" }
@@ -23,7 +23,7 @@ const MOCK_HINT = [
   ["1–5, 10", "scenario default"], ["6", "empty result"], ["7", "backend error, then success on retry"], ["8", "partial results"], ["9", "invalid and missing citations"],
 ] as const;
 
-export function RedTeamLab({ timeoutMs = RED_TEAM_TIMEOUT_MS }: { timeoutMs?: number }) {
+export function RedTeamLab({ timeoutMs = config.redTeamTimeoutMs || RED_TEAM_TIMEOUT_MS }: { timeoutMs?: number }) {
   const [scenario, setScenario] = useState<AdversarialScenarioId | null>(null);
   const [trialsRaw, setTrialsRaw] = useState("3");
   const [tried, setTried] = useState(false);

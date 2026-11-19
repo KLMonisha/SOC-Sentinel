@@ -9,6 +9,7 @@ import { formatTime } from "@/lib/format";
 import { EventChip } from "./EventChip";
 import { useInvestigation } from "./InvestigationProvider";
 import { eventIdOfNode } from "./model/graphModel";
+import { provenanceIssues } from "@/features/investigation/model";
 
 const NA = <span className="text-ink-faint">Not available</span>;
 
@@ -52,7 +53,7 @@ function SourceEventView({ event }: { event: SourceEvent }) {
       </p>
       <Section title="Original log record (untrusted text)">
         {/* Rendered as inert text; never interpreted as HTML. */}
-        <pre data-testid="raw-log" className="max-h-40 overflow-auto whitespace-pre-wrap break-all border border-line bg-bg p-2.5 font-mono text-[12px] leading-relaxed">
+        <pre data-testid="raw-log" className="max-h-40 overflow-auto whitespace-pre-wrap break-all border-l-2 border-line-strong bg-void/60 px-3 py-2.5 font-mono text-[12px] leading-relaxed">
           {event.raw_text}
         </pre>
         <p className="mt-1 text-[11px] text-ink-faint">
@@ -66,6 +67,12 @@ function SourceEventView({ event }: { event: SourceEvent }) {
           <Row k="Line">{event.line_number}</Row>
           <Row k="Record SHA-256">{event.raw_hash || NA}</Row>
         </dl>
+        {(() => {
+          const issues = provenanceIssues(event);
+          return issues.length === 0
+            ? <p className="mt-2 text-[11.5px] text-verified" data-testid="provenance-status">Provenance complete: source file, line, timestamp and SHA-256 are all recorded.</p>
+            : <p className="mt-2 text-[11.5px] text-suspicious" data-testid="provenance-status">Provenance incomplete: {issues.join(", ")} not recorded.</p>;
+        })()}
       </Section>
       <Section title="Normalized fields">
         <dl>

@@ -195,7 +195,7 @@ interface Props {
 }
 
 const tool =
-  "inline-flex items-center gap-1.5 border border-line-strong bg-surface-2 px-2 py-1 text-[11.5px] text-ink-muted hover:bg-surface-3 hover:text-ink disabled:opacity-40 aria-pressed:border-verified/70 aria-pressed:text-ink";
+  "inline-flex items-center gap-1.5 border border-line-strong/70 bg-void/70 px-2.5 py-1.5 text-[11px] uppercase tracking-[0.1em] text-ink-muted backdrop-blur-sm transition-colors hover:text-ink disabled:opacity-40 aria-pressed:border-verified/70 aria-pressed:text-verified";
 
 function Flow({ graph, layout, highlight, selection, onSelectNode, onSelectEdge, onClear }: Props) {
   const { setViewport, getViewport } = useReactFlow();
@@ -326,7 +326,7 @@ function Flow({ graph, layout, highlight, selection, onSelectNode, onSelectEdge,
         <Background gap={32} size={1} color="#14231e" />
         <Controls showInteractive={false} position="bottom-left" />
 
-        <FlowPanel position="top-right" className="!m-2 flex gap-1.5">
+        <FlowPanel position="top-right" className="!m-3 flex gap-1.5 sm:!m-4">
           <button type="button" className={tool} onClick={() => frame(fullBounds, 400)} aria-label="Reset view to the whole constellation">
             <LocateFixed size={12} aria-hidden /> Reset view
           </button>
@@ -342,8 +342,8 @@ function Flow({ graph, layout, highlight, selection, onSelectNode, onSelectEdge,
         </FlowPanel>
 
         {hud && (
-          <FlowPanel position="top-left" className="!m-2">
-            <div role="status" className="border border-line-strong bg-surface-2/95 px-2.5 py-1.5 font-mono text-[11px]">
+          <FlowPanel position="top-left" className="!m-3 sm:!m-4">
+            <div role="status" className="border-l-2 border-verified bg-void/80 px-3 py-2 font-mono text-[11px] backdrop-blur-sm">
               <span className="text-ink-faint">REPLAY {state.replay}/{state.total}</span>
               <span className="ml-2 text-ink">{clock(hud.timestamp)} UTC</span>
               <span className="ml-2 text-verified">{hud.event_id}</span>
@@ -351,8 +351,8 @@ function Flow({ graph, layout, highlight, selection, onSelectNode, onSelectEdge,
           </FlowPanel>
         )}
 
-        <FlowPanel position="bottom-right" className="!m-2">
-          <div aria-label="Legend" className="flex flex-wrap items-center gap-x-3 gap-y-1 border border-line bg-surface/90 px-2.5 py-1.5 text-[10.5px] text-ink-muted">
+        <FlowPanel position="bottom-right" className="!m-3 sm:!m-4">
+          <div aria-label="Legend" className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-line-strong/60 bg-void/70 px-3 py-2 text-[10.5px] text-ink-muted backdrop-blur-sm">
             <span><span className="text-verified">━</span> observed (from a source log field)</span>
             <span><span className="text-suspicious">┄</span> inferred (hypothesis)</span>
             <span><span className="text-missing">╌ ○</span> missing telemetry</span>
@@ -368,7 +368,7 @@ export function Constellation(props: Props) {
     return <EmptyState title="Nothing revealed yet" detail="No evidence is visible at this replay position." />;
   }
   return (
-    <div className="h-[clamp(480px,66vh,780px)] border border-line bg-bg" aria-label="Evidence constellation graph">
+    <div className="room-graph h-[clamp(520px,calc(100dvh-290px),900px)]" aria-label="Evidence constellation graph">
       <ReactFlowProvider>
         <Flow {...props} />
       </ReactFlowProvider>

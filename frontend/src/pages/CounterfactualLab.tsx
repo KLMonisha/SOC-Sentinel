@@ -12,6 +12,7 @@ import { EventSpine } from "@/features/counterfactual/EventSpine";
 import { BranchPlaceholder, OutcomeCard, type Mark } from "@/features/counterfactual/OutcomeCard";
 import { ComparisonTable, ResultDetails } from "@/features/counterfactual/ResultDetails";
 import { compare, findingsCiting, storedCaseUnchanged } from "@/features/counterfactual/diff";
+import { recordCounterfactual } from "@/features/counterfactual/session";
 import { orderEvents } from "@/features/evidence/model/graphModel";
 import { evidencePath } from "@/features/report/citations";
 import { config } from "@/lib/config";
@@ -91,6 +92,7 @@ export function CounterfactualLab() {
     try {
       const res = await api.counterfactual(caseId, { overrides: [{ type: "exclude_event", event_id: excluded, reason: reason.trim() }] }, ctrl.signal);
       if (ctrl.signal.aborted) return;
+      recordCounterfactual(caseId, { res, excludedEventId: excluded, reason: reason.trim(), at: new Date().toISOString() });
       setRun({ kind: "done", res, excluded, verify: "pending" });
       // Integrity check: re-read the stored case and confirm the counterfactual did not change it.
       try {

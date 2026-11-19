@@ -2,4 +2,5 @@
 interface ImportMetaEnv {
   readonly VITE_USE_MOCKS?: string;
   readonly VITE_API_BASE_URL?: string;
+  readonly VITE_REDTEAM_TIMEOUT_MS?: string;
 }

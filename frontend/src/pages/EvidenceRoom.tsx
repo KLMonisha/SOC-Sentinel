@@ -4,8 +4,8 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ApiError, api } from "@/api/client";
 import type { CaseDetail } from "@/api/types";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Panel } from "@/components/ui/Panel";
 import { DecisionPanel } from "@/features/decision/DecisionPanel";
+import { ExportPanel } from "@/features/export/ExportPanel";
 import { AnalysisPanel } from "@/features/evidence/AnalysisPanel";
 import { CaseHeader } from "@/features/evidence/CaseHeader";
 import { Constellation } from "@/features/evidence/Constellation";
@@ -17,7 +17,9 @@ import { Timeline } from "@/features/evidence/Timeline";
 type Load = { kind: "loading" } | { kind: "error"; error: ApiError | Error } | { kind: "ready"; data: CaseDetail };
 
 const tab = (active: boolean) =>
-  `px-3 py-1.5 text-[12px] border-b-2 ${active ? "border-verified text-ink" : "border-transparent text-ink-muted hover:text-ink"}`;
+  `-mb-px min-w-0 flex-1 px-1.5 py-3 text-center text-[11px] uppercase tracking-[0.1em] border-b-2 transition-colors ${active ? "border-verified text-ink" : "border-transparent text-ink-faint hover:text-ink"}`;
+const view = (active: boolean) =>
+  `px-3 py-1 text-[11px] uppercase tracking-[0.14em] border transition-colors ${active ? "border-verified/60 bg-verified/10 text-verified" : "border-line-strong/70 bg-void/60 text-ink-muted hover:text-ink"}`;
 
 function Workspace({ onReload }: { onReload: () => Promise<void> }) {
   const { state, dispatch, graph, layout, highlight, fullGraph, selectNode, selectEvent, caseDetail } = useInvestigation();
@@ -46,19 +48,18 @@ function Workspace({ onReload }: { onReload: () => Promise<void> }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected, synced]);
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-      <div className="min-w-0 space-y-4">
-        <Panel
-          title="Evidence constellation"
-          meta={
+    <div className="grid xl:grid-cols-[minmax(0,1fr)_minmax(380px,26vw)]">
+      <div className="min-w-0">
+        <section aria-label="Evidence constellation" className="room-stage relative border-y border-line/70">
+          <div className="flex items-center gap-3 border-b border-line/50 px-5 py-2.5 sm:px-8 lg:px-12">
+            <span className="t-micro hidden text-ink sm:inline">Evidence constellation</span>
             <span role="tablist" aria-label="Evidence view" className="flex gap-1">
-              <button role="tab" aria-selected={state.view === "graph"} className={tab(state.view === "graph")} onClick={() => dispatch({ type: "setView", view: "graph" })}>Graph</button>
-              <button role="tab" aria-selected={state.view === "list"} className={tab(state.view === "list")} onClick={() => dispatch({ type: "setView", view: "list" })}>List</button>
+              <button role="tab" aria-selected={state.view === "graph"} className={view(state.view === "graph")} onClick={() => dispatch({ type: "setView", view: "graph" })}>Graph</button>
+              <button role="tab" aria-selected={state.view === "list"} className={view(state.view === "list")} onClick={() => dispatch({ type: "setView", view: "list" })}>List</button>
             </span>
-          }
-        >
+          </div>
           {fullGraph.warnings.length > 0 && (
-            <ul role="status" className="mb-2 text-[11px] text-suspicious">
+            <ul role="status" className="absolute bottom-3 left-5 z-[5] max-w-[60ch] text-[11px] text-suspicious sm:left-8 lg:left-12">
               {fullGraph.warnings.map((w) => <li key={w}>{w}</li>)}
             </ul>
           )}
@@ -70,24 +71,26 @@ function Workspace({ onReload }: { onReload: () => Promise<void> }) {
               onClear={() => dispatch({ type: "clear" })}
             />
           ) : (
-            <EvidenceList />
+            <div className="px-5 pb-8 pt-6 sm:px-8 lg:px-12"><EvidenceList /></div>
           )}
-        </Panel>
+        </section>
         <Timeline />
       </div>
 
-      <aside aria-label="Investigation details" className="min-w-0 self-start xl:sticky xl:top-4 border border-line bg-surface">
-        <div role="tablist" aria-label="Details" className="flex border-b border-line px-2">
-          <button role="tab" aria-selected={state.panel === "analysis"} className={tab(state.panel === "analysis")} onClick={() => dispatch({ type: "setPanel", panel: "analysis" })}>Analysis</button>
-          <button role="tab" aria-selected={state.panel === "inspector"} className={tab(state.panel === "inspector")} onClick={() => dispatch({ type: "setPanel", panel: "inspector" })}>Inspector</button>
-          <button role="tab" aria-selected={state.panel === "decision"} className={tab(state.panel === "decision")} onClick={() => dispatch({ type: "setPanel", panel: "decision" })}>Decision</button>
+      <aside id="room-details" aria-label="Investigation details" className="min-w-0 border-line/70 xl:sticky xl:top-0 xl:flex xl:h-[calc(100dvh-60px)] xl:flex-col xl:border-l">
+        <div role="tablist" aria-label="Details" className="flex shrink-0 border-b border-line/70 px-4 sm:px-8 xl:px-5">
+          {(["analysis", "inspector", "decision", "export"] as const).map((p) => (
+            <button key={p} role="tab" aria-selected={state.panel === p} className={tab(state.panel === p)} onClick={() => dispatch({ type: "setPanel", panel: p })}>
+              {p === "analysis" ? "Analysis" : p === "inspector" ? "Inspector" : p === "decision" ? "Decision" : "Export"}
+            </button>
+          ))}
         </div>
-        <div className="max-h-[calc(100vh-180px)] overflow-auto p-4">
+        <div className="min-h-0 flex-1 overflow-auto px-5 py-6 sm:px-8 xl:px-6">
           <motion.div
             key={state.panel === "inspector" ? `i:${state.selection?.id ?? ""}` : state.panel}
             initial={reduce ? false : { opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}
           >
-            {state.panel === "analysis" ? <AnalysisPanel /> : state.panel === "decision" ? <DecisionPanel caseDetail={caseDetail} onDecided={onReload} /> : <Inspector />}
+            {state.panel === "analysis" ? <AnalysisPanel /> : state.panel === "decision" ? <DecisionPanel caseDetail={caseDetail} onDecided={onReload} /> : state.panel === "export" ? <ExportPanel detail={caseDetail} compact /> : <Inspector />}
           </motion.div>
         </div>
       </aside>
@@ -121,12 +124,12 @@ export function EvidenceRoom() {
     setLoad({ kind: "ready", data });
   }, [caseId]);
 
-  if (load.kind === "loading") return <p role="status" className="text-[13px] text-ink-muted">Loading case…</p>;
+  if (load.kind === "loading") return <p role="status" className="px-6 py-10 text-[13px] text-ink-muted sm:px-14">Loading case…</p>;
 
   if (load.kind === "error") {
     const requestId = "requestId" in load.error ? load.error.requestId : null;
     return (
-      <div role="alert" className="mx-auto max-w-xl border border-critical/40 p-4 text-[13px]">
+      <div role="alert" className="mx-auto mt-12 max-w-xl border border-critical/40 p-5 text-[13px]">
         <p className="text-critical">Could not open case {caseId}.</p>
         <p className="mt-1 text-ink-muted">{load.error.message}
           {requestId && <span className="ml-2 font-mono text-xs text-ink-faint">request {requestId}</span>}</p>
@@ -141,10 +144,10 @@ export function EvidenceRoom() {
   return (
     // key: a different case resets replay and selection.
     <InvestigationProvider key={load.data.summary.case_id} caseDetail={load.data}>
-      <div className="mx-auto max-w-[1680px] space-y-4">
+      <div className="w-full">
         <CaseHeader />
         {load.data.events.length === 0 ? (
-          <EmptyState title="No source events" detail="This case has no stored source events to explore." />
+          <div className="px-6 py-10 sm:px-14"><EmptyState title="No source events" detail="This case has no stored source events to explore." /></div>
         ) : (
           <Workspace onReload={reload} />
         )}
@@ -155,7 +158,7 @@ export function EvidenceRoom() {
 
 export function EvidenceRoomIndex() {
   return (
-    <div className="mx-auto max-w-xl">
+    <div className="mx-auto mt-12 max-w-xl px-6">
       <EmptyState title="No case selected" detail="Open a case from the Command Center queue to enter its Evidence Room." />
       <p className="mt-3 text-center"><Link to="/app" className="text-[13px] underline underline-offset-2">Go to Command Center</Link></p>
     </div>
