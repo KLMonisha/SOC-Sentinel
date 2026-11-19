@@ -6,7 +6,7 @@ from app.services.detection import (
     detect_brute_force,
     detect_success_after_failures,
     detect_suspicious_access,
-    run_detection
+    run_detection,
 )
 
 
@@ -20,10 +20,11 @@ def make_event(
     username="alice",
     source_ip="192.168.1.10",
     resource="/admin",
-    outcome="unknown"
+    outcome="unknown",
 ):
     return SecurityEvent(
         event_id=f"evt_{index}",
+        dataset_id="ds_test",
         timestamp=BASE_TIME + timedelta(minutes=minutes),
         event_type=event_type,
         username=username,
@@ -33,8 +34,10 @@ def make_event(
         resource=resource,
         outcome=outcome,
         source="test_logs.csv",
+        line_number=index + 1,
+        raw_text=f'{{"event_id":"evt_{index}"}}',
         raw_hash=f"{index:064x}",
-        raw_record={"test": index}
+        raw_record={"test": index},
     )
 
 
@@ -57,7 +60,6 @@ def test_no_brute_force_below_threshold():
         make_event(i, "authentication_failure", i)
         for i in range(4)
     ]
-
     assert detect_brute_force(events) == []
 
 
@@ -66,7 +68,6 @@ def test_no_brute_force_outside_time_window():
         make_event(i, "authentication_failure", i * 5)
         for i in range(5)
     ]
-
     assert detect_brute_force(events) == []
 
 
@@ -77,12 +78,7 @@ def test_detect_success_after_failures():
     ]
 
     events.append(
-        make_event(
-            4,
-            "authentication_success",
-            5,
-            outcome="success"
-        )
+        make_event(4, "authentication_success", 5, outcome="success")
     )
 
     alerts = detect_success_after_failures(events)
@@ -98,18 +94,12 @@ def test_no_success_after_failures_without_success():
         make_event(i, "authentication_failure", i)
         for i in range(5)
     ]
-
     assert detect_success_after_failures(events) == []
 
 
 def test_detect_suspicious_access():
     events = [
-        make_event(
-            i,
-            "web_access",
-            i,
-            outcome="failure"
-        )
+        make_event(i, "web_access", i, outcome="failure")
         for i in range(5)
     ]
 
@@ -123,15 +113,9 @@ def test_detect_suspicious_access():
 
 def test_no_suspicious_access_below_threshold():
     events = [
-        make_event(
-            i,
-            "web_access",
-            i,
-            outcome="failure"
-        )
+        make_event(i, "web_access", i, outcome="failure")
         for i in range(4)
     ]
-
     assert detect_suspicious_access(events) == []
 
 
@@ -142,17 +126,11 @@ def test_run_detection_combines_rules():
     ]
 
     events.extend([
-        make_event(
-            i + 10,
-            "web_access",
-            i,
-            outcome="failure"
-        )
+        make_event(i + 10, "web_access", i, outcome="failure")
         for i in range(5)
     ])
 
     alerts = run_detection(events)
-
     rule_ids = {alert["rule_id"] for alert in alerts}
 
     assert "DET-001" in rule_ids

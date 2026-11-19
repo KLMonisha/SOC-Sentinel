@@ -1,6 +1,9 @@
 from fastapi import FastAPI
-from app.api.routes import router
 
+from app.api.routes import router
+from dotenv import load_dotenv
+
+load_dotenv()
 app = FastAPI(
     title="SOC Sentinel",
     description="Security Alert Triage and Investigation System",
