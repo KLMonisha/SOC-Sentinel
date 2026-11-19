@@ -4,8 +4,8 @@
 -- Transaction protocol (the backend runs ALL of this in ONE database transaction):
 --   1. SELECT * FROM soc.begin_investigation_query(case_id, idempotency_key, request_hash);
 --        -> takes a per-case advisory lock (held to end of transaction), then
---           'replay'   : this key was already executed with the SAME request; return the stored result, charge nothing
---           'proceed'  : budget available; continue
+--           replay     : this key was already executed with the SAME request; return the stored result, charge nothing
+--           proceed    : budget available; continue
 --           raises SC001 (budget exhausted) / SC002 (key reused with a different request) / SC404 (unknown case)
 --   2. read-only retrieval of existing events; compute the new assessment (backend code)
 --   3. if the case changed: INSERT the new case_assessments row (revision n+1), its children, and case_events
@@ -137,7 +137,7 @@ BEGIN
 END $$;
 
 -- p_retrieved: JSON array of event id strings, e.g. ["evt_...", "evt_..."] (may be empty).
--- p_before must be the case's CURRENT assessment (stale callers get SC003); p_after is p_before when nothing changed.
+-- p_before must be the CURRENT assessment of the case (stale callers get SC003); p_after is p_before when nothing changed.
 CREATE FUNCTION soc.record_investigation_query(
   p_case_id text, p_idempotency_key text, p_tool text, p_params jsonb, p_request_hash text, p_reason text,
   p_before uuid, p_after uuid, p_retrieved jsonb, p_request_id text DEFAULT NULL)
@@ -207,7 +207,7 @@ SELECT soc.secure_table('soc.investigation_queries');
 SELECT soc.secure_table('soc.investigation_query_events');
 
 GRANT SELECT ON soc.case_current, soc.planner_candidate_state TO soc_api, soc_readonly;
-REVOKE ALL ON ALL FUNCTIONS IN SCHEMA soc FROM PUBLIC;
+SELECT soc.lock_down_schema();
 GRANT EXECUTE ON FUNCTION soc.investigation_query_guard(), soc.begin_investigation_query(text, text, text),
   soc.record_investigation_query(text, text, text, jsonb, text, text, uuid, uuid, jsonb, text) TO soc_api;
 GRANT EXECUTE ON FUNCTION soc.investigation_budget(text) TO soc_api, soc_readonly;

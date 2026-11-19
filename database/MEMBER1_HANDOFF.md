@@ -35,9 +35,9 @@ def derive_case_id(dataset_id, correlation_key, anchor_event_id):
 | `raw_text` | The **verbatim original record**. CSV: the exact text of the record (all physical lines of a quoted multi-line record, no trailing newline). JSON: compact re-serialization of the parsed element with key order preserved: `json.dumps(el, ensure_ascii=False, separators=(",", ":"))` (documented as "verbatim as parsed"; Q26). Never normalized or trimmed. Non-empty. |
 | `raw_sha256` | `sha256_hex(raw_text)`. **The database verifies this.** (API field name stays `raw_hash`.) |
 | `line_number` | CSV: 1-based **physical line where the record starts** (header = line 1). JSON: 1-based **element index**. Use the CSV reader's physical line counter (`reader.line_num` at the start of the record), not `enumerate(start=2)`, which is wrong for multi-line quoted fields. Unique per `(dataset, source_file)`. |
-| `source_file` | Canonical filename (basename; no `/`, `\`, control chars; ≤255). |
+| `source_file` | Canonical filename (basename; no `/`, `\`, control chars; ≤255). **Sanitize the uploaded name** (`Path(name).name` does not remove backslashes on Linux): replace `\`, `/` and control characters before use, or the dataset insert is rejected. |
 | `timestamp` | UTC (you already reject naive timestamps; keep that). |
-| `username`, `source_ip`, `destination_ip`, `host`, `resource` | Nullable. Do not invent values. `source_ip` is stored as text: do not reject odd strings here. |
+| `username`, `source_ip`, `destination_ip`, `host`, `resource` | Nullable. Do not invent values. `source_ip` is stored as text: do not reject odd strings here. **Length limits:** the first four ≤ 4096 characters, `resource` ≤ 8192, `event_type` ≤ 256. A value beyond a limit makes the database reject the *whole upload*, so the backend must **quarantine that row** (reason up to 20000 characters) rather than insert it. Titles/descriptions built from log values (case title, finding title) must stay ≤ 20000 characters. |
 | `outcome` | `success` / `failure` / `unknown`. |
 | `canonical_json_sha256` | Optional. Your **current** `raw_hash` (SHA-256 of canonical JSON of the parsed record). Kept for transition cross-checks only; it is **not** the integrity hash. |
 

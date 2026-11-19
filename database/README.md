@@ -1,50 +1,49 @@
 # SOC Sentinel database
 
-PostgreSQL schema for Supabase project `soc-sentinel` (PostgreSQL 17). Accessed **only** by the FastAPI backend; the frontend never connects to it.
+PostgreSQL schema for Supabase project `soc-sentinel` (PostgreSQL 17). Accessed **only** by the FastAPI backend; the frontend never connects to it. Deployment-readiness findings: `DEPLOYMENT_AUDIT.md`.
 
 | Path | What |
 |---|---|
 | `supabase/migrations/*.sql` | The five migrations. **Single source of truth** for the schema (Supabase CLI format). |
+| `database/audit/post_deploy_audit.sql` | Read-only script to run on Supabase after applying. Every row must be PASS or INFO. |
 | `database/optional/*.sql` | Optional counterfactual-audit tables. Not applied unless you copy the file into `supabase/migrations/`. |
-| `database/SCHEMA_DESIGN.md` | Design, per-table spec, security model, transaction protocol, verification status. |
-| `database/ER_DIAGRAM.md` | Mermaid ER diagram. |
-| `database/SCHEMA_OPEN_QUESTIONS.md` | Decisions and what still depends on Member 1 / you. |
-| `database/INTEGRATION_PLAN.md` | Backend ↔ PostgreSQL ↔ frontend mappings, SQLAlchemy layout, transaction/connection strategy, integration order. |
-| `database/MEMBER1_HANDOFF.md` | What the backend functionality must produce so the database accepts it. |
-| `database/tests/` | `run_tests.py` (disposable-PostgreSQL verification), `sql/` tests, `vectors.json` (id reference vectors). |
+| `database/SCHEMA_DESIGN.md` · `ER_DIAGRAM.md` · `SCHEMA_OPEN_QUESTIONS.md` | Design, diagram, open decisions. |
+| `database/INTEGRATION_PLAN.md` · `MEMBER1_HANDOFF.md` | Integration plan; what the backend functionality must produce. |
+| `database/tests/` | `run_tests.py` (disposable-PostgreSQL verification), `sql/` tests, `vectors.json`. |
 
-Nothing in this folder contains a password, key or connection string with credentials. **Do not commit any.** `.env` files are git-ignored.
+No file here contains a password, key or connection string with credentials. **Do not commit any.** `.env` files are git-ignored.
 
-## 1. Verify locally first (no Supabase needed)
+## 0. Verify locally first (no Supabase needed)
 
-Needs PostgreSQL server binaries (`initdb`, `postgres`, `psql`, `pg_ctl`) and Python 3.9+; no packages to install. The runner starts a throw-away cluster in a temp directory on a random loopback port and deletes it afterwards. It never connects anywhere else.
+Needs PostgreSQL server binaries (`initdb`, `postgres`, `psql`, `pg_ctl`) and Python 3.9+. The runner starts a throw-away cluster in a temp directory on a random loopback port, emulates a worst-case Supabase (default privileges that auto-grant new objects to the API roles; empty `search_path` during migration), and deletes everything afterwards. It never connects anywhere else.
 
 ```bash
 python database/tests/run_tests.py --pg-bin "C:/Program Files/PostgreSQL/17/bin"
-# expected last line:  42/42 checks passed
+# expected last line:  58/58 checks passed
 ```
-Use a **17.x** `--pg-bin` if you have one (Supabase runs 17; the suite was developed on 18.6 because that was installed). `--no-supabase-stubs` runs against plain PostgreSQL without Supabase's built-in roles (skips the one test file that needs them).
+**Run this against PostgreSQL 17.x binaries before deploying.** The suite has so far only run on 18.6 (the only version installed here). Install 17 side by side with 18 (it uses its own folder; it does not touch your running service), for example `winget install PostgreSQL.PostgreSQL.17` (choose a different port than your existing server during setup, or install the zip distribution), then:
+```bash
+python database/tests/run_tests.py --pg-bin "C:/Program Files/PostgreSQL/17/bin"
+```
+The runner uses its own temporary data directory and random port, so it never interferes with any PostgreSQL service you have running.
 
-## 2. Apply to Supabase (when you decide to; this has NOT been done)
+## 1. Apply to Supabase (when you decide to; this has NOT been done)
 
-### Option A: Supabase CLI (recommended; records applied migrations)
-Run from the repository root (`C:\Users\Priyanka\SOC-Sentinel`). Replace `<PROJECT_REF>` with your project's reference id (Dashboard → Project Settings → General).
+Supabase CLI is the supported path: it records each applied file in `supabase_migrations.schema_migrations`, so re-running `db push` skips applied files and never applies one twice.
+
+Replace `<PROJECT_REF>` with your project reference id (Dashboard → Project Settings → General). Run from the repository root.
 
 ```bash
-npx supabase --version                       # downloads the CLI on first use
-npx supabase login                           # opens the browser / asks for an access token
-
-# only if supabase/config.toml does not exist yet (it will not touch supabase/migrations):
-npx supabase init
-
-npx supabase link --project-ref <PROJECT_REF>   # asks for the database password; do not put it in a file
-
-npx supabase migration list                  # compare local vs remote (remote should be empty for these)
-npx supabase db push --dry-run               # prints the migrations that WOULD be applied; changes nothing
-npx supabase db push                         # applies them, in filename order, one transaction per file
-npx supabase migration list                  # all five should now show as applied
+npx supabase --version
+npx supabase login
+npx supabase init                              # ONLY if supabase/config.toml does not exist; it does not touch migrations
+npx supabase link --project-ref <PROJECT_REF>  # prompts for the database password; never put it in a file
+npx supabase migration list                    # remote column must be empty for these five
+npx supabase db push --dry-run                 # lists what WOULD be applied; changes nothing
+npx supabase db push                           # applies in filename order; each file is atomic
+npx supabase migration list                    # all five now applied
 ```
-Expected migrations, in order:
+Expected, in order:
 ```
 20261119120000_p0_foundation_ingestion.sql
 20261119120100_p0_cases_assessments_evidence.sql
@@ -52,58 +51,66 @@ Expected migrations, in order:
 20261119120300_p1_investigation.sql
 20261119120400_p2_adversarial.sql
 ```
-All are non-destructive (no DROP/TRUNCATE/DELETE/CASCADE) and use no extensions. If one fails, its transaction rolls back; fix and re-run `db push` (already-applied files are skipped).
+Each file is atomic: if it fails, nothing from that file is kept; fix and re-run `db push`. Re-running the same file by hand (outside tracking) fails safely at `CREATE SCHEMA soc` / `CREATE TABLE` ("already exists"): it never modifies existing data.
 
-### Option B: SQL Editor (no CLI)
-Dashboard → SQL Editor → New query. Paste **one file at a time, in the order above**, and Run. Each file is a single transaction when run as one query. You must not run a file twice.
+**SQL Editor is NOT recommended** (not tracked, and each file must be wrapped in `BEGIN; ... COMMIT;` by you because the files contain no transaction control). If you use it anyway, paste one file at a time inside `BEGIN; … COMMIT;`, then tell the CLI so it does not re-apply: `npx supabase migration repair --status applied <VERSION>` for each applied file version (`20261119120000` etc.).
 
-## 3. After applying (manual steps)
+## 2. Post-deploy audit (read-only)
 
-Run these in the SQL Editor as the `postgres` user. **Choose strong passwords and keep them out of the repo.**
-
-```sql
--- 3a. Give the backend roles passwords (the migrations create them WITHOUT one, so they cannot log in yet)
-ALTER ROLE soc_api      WITH PASSWORD '<generate-a-long-random-password>';
-ALTER ROLE soc_readonly WITH PASSWORD '<another-long-random-password>';
+```bash
+psql "<DIRECT_OR_POOLER_CONNECTION_AS_postgres>" -f database/audit/post_deploy_audit.sql
 ```
-```sql
--- 3b. Sanity checks (read-only)
-SELECT count(*) AS soc_tables FROM pg_tables WHERE schemaname = 'soc';                       -- expect 22
-SELECT relname, relrowsecurity, relforcerowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
- WHERE n.nspname='soc' AND c.relkind='r' ORDER BY 1;                                          -- all true / true
-SELECT rolname, rolbypassrls, rolsuper, rolcanlogin FROM pg_roles WHERE rolname IN ('postgres','soc_api','soc_readonly');
--- expect soc_api / soc_readonly: bypassrls=false, super=false, canlogin=true.
--- NOTE the value for 'postgres': the admin role must have bypassrls=true to read soc tables (FORCE RLS). See SCHEMA_OPEN_QUESTIONS C2.
-SELECT has_schema_privilege('anon','soc','USAGE') AS anon_usage, has_schema_privilege('authenticated','soc','USAGE') AS auth_usage;  -- both false
+or paste `database/audit/post_deploy_audit.sql` into the SQL Editor and run. Required: **no row with status FAIL.** `INFO` rows need a human look (row 15 tells you whether your admin role can read `soc` tables; row 6 tells you whether `soc` is exposed through the Data API).
+
+## 3. Set the backend password (do not use the SQL Editor for this)
+
+The migrations create `soc_api` and `soc_readonly` **without a password**, so they cannot log in. Setting a password through a SQL statement can leave it in plain text in the editor history and logs; use the client-side hashing of psql instead (the password is typed at a hidden prompt and sent already hashed):
+
+```bash
+psql "postgresql://postgres.<PROJECT_REF>@<POOLER_HOST>:5432/postgres?sslmode=require"   # prompts for the postgres password
+postgres=> \password soc_api
+postgres=> \q
 ```
+Alternatively Dashboard → Database → Roles → `soc_api` → edit → set password. Use a long random password; store it only in your secret manager / the backend's environment. Leave `soc_readonly` without a password unless you actually need it.
+
+## 4. Confirm the Data API does not expose `soc`
+
+1. Dashboard → Project Settings → API → *Exposed schemas* must NOT contain `soc` (leave `public`, `graphql_public`).
+2. The audit's row 6 reads the same setting from the database (`authenticator` role, `pgrst.db_schemas`).
+3. Live check with the public anon key (it is a public client key; do not share the service key). Expected: an error that the schema is not exposed (`PGRST106`) and **no data**:
+```bash
+curl -s -H "apikey: <ANON_KEY>" -H "Accept-Profile: soc" "https://<PROJECT_REF>.supabase.co/rest/v1/datasets?limit=1"
+```
+Even if `soc` were exposed by mistake, `anon` / `authenticated` / `service_role` hold no privilege on it (the audit's row 5 verifies this), so the request would still be refused.
+
+## 5. Connection check for the backend role
+
+Use the exact connection method the backend will use (placeholders only; never commit real values):
+
 ```text
-3c. Dashboard → Project Settings → API → "Exposed schemas": make sure `soc` is NOT listed (leave public/graphql_public as they are).
-    Do not enable the Data API for this schema, and do not create Supabase client keys for the frontend.
-```
-
-## 4. Connection strings for the backend (placeholders only)
-
-Put these in the backend's environment or secret manager, never in git. Copy the host/port from Dashboard → Connect.
-
-```text
-# direct connection (IPv6 unless you have the IPv4 add-on)
-DATABASE_URL=postgresql+psycopg://soc_api:<SOC_API_PASSWORD>@db.<PROJECT_REF>.supabase.co:5432/postgres?sslmode=require
-
 # session-mode pooler (IPv4 friendly; recommended for a long-running FastAPI service)
 DATABASE_URL=postgresql+psycopg://soc_api.<PROJECT_REF>:<SOC_API_PASSWORD>@<POOLER_HOST>:5432/postgres?sslmode=require
-
-# transaction-mode pooler (port 6543): works, but disable client-side prepared statements (psycopg: prepare_threshold=None)
+# direct connection (IPv6 unless you have the IPv4 add-on)
+DATABASE_URL=postgresql+psycopg://soc_api:<SOC_API_PASSWORD>@db.<PROJECT_REF>.supabase.co:5432/postgres?sslmode=require
+# transaction-mode pooler (port 6543): works, but disable prepared statements (psycopg: prepare_threshold=None)
 ```
-The backend role name is **`soc_api`** (with the `.<PROJECT_REF>` suffix only on the pooler). Never use the `postgres` or `service_role` credentials in the backend.
+```bash
+psql "postgresql://soc_api.<PROJECT_REF>@<POOLER_HOST>:5432/postgres?sslmode=require" \
+  -c "select current_user, current_setting('lock_timeout'), current_setting('statement_timeout')" \
+  -c "select count(*) from soc.datasets" \
+  -c "delete from soc.datasets"
+# expect: soc_api | 10s | 30s ;  count 0 ;  the DELETE must fail with 'permission denied for table datasets'
+```
+If login is refused: the password was not set (§3), the username lacks the `.<PROJECT_REF>` suffix (pooler only), the direct host needs IPv6, or the pooler pool size exceeds the role's connection limit (20): keep the pooler pool size at or below 20 for this role.
 
-## 5. If you must start over (empty project only)
+## 6. If you must start over (empty project only)
 
-The migrations have no "down" scripts on purpose (the schema is evidence storage and nothing in it can be deleted by the application). On a **throw-away** project you can discard everything with a manual statement; this destroys all stored evidence and is not part of any migration:
+The migrations have no "down" scripts on purpose (the schema is evidence storage; the application cannot delete anything). On a **throw-away** project you can discard everything manually; this destroys all stored evidence and is not part of any migration:
 ```sql
 -- DANGER: only on a project with no data you need
 DROP SCHEMA soc CASCADE;  DROP ROLE soc_api;  DROP ROLE soc_readonly;
--- then clear the remote history, e.g.  npx supabase migration repair --status reverted <version>  for each version
+-- then clear the remote history:  npx supabase migration repair --status reverted <VERSION>   (for each version)
 ```
 
-## 6. Changing the schema later
-Add a **new** migration file with a later timestamp (`npx supabase migration new <name>`). Never edit an applied migration. Call `SELECT soc.secure_table('soc.<new_table>')` for every new table so it gets RLS, grants, policies and append-only triggers, and add it to `database/tests/sql/08_security.sql` (the suite checks that every table in `soc` is locked down).
+## 7. Changing the schema later
+Add a **new** migration (`npx supabase migration new <name>`); never edit an applied one. For every new table call `SELECT soc.secure_table('soc.<table>')` and end the file with `SELECT soc.lock_down_schema();`. Add the table to `database/tests/sql/08_security.sql` and re-run the suite and the audit.

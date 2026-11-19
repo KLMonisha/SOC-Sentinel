@@ -87,6 +87,7 @@ class Cluster:
         self.dir = Path(tempfile.mkdtemp(prefix="soc_pg_"))
         self.port = free_port()
         self.proc: subprocess.Popen | None = None
+        self.supabase_stubs = True
         self.log = self.dir / "server.log"
 
     def start(self) -> None:
@@ -112,7 +113,7 @@ class Cluster:
             shutil.rmtree(self.dir, ignore_errors=True)
 
     def psql(self, db: str, sql: str | None = None, user: str = "postgres", file: Path | None = None, stdin: str | None = None,
-             verbose: bool = True, timeout: int = 120, single_tx: bool = False, extra: list[str] | None = None) -> subprocess.CompletedProcess:
+             verbose: bool = True, timeout: int = 120, single_tx: bool = False, extra: list[str] | None = None, env_extra: dict | None = None) -> subprocess.CompletedProcess:
         cmd = [str(self.bin / f"psql{EXE}"), "-X", "-q", "-h", "127.0.0.1", "-p", str(self.port), "-U", user, "-d", db, "-v", "ON_ERROR_STOP=1"]
         cmd += ["-v", f"VERBOSITY={'verbose' if verbose else 'default'}", "-A", "-t"]
         if single_tx:
@@ -126,7 +127,7 @@ class Cluster:
             cmd += ["-f", str(file)]
         if stdin is not None:
             cmd += ["-f", "-"]
-        env = {**os.environ, "PGCLIENTENCODING": "UTF8"}
+        env = {**os.environ, "PGCLIENTENCODING": "UTF8", **(env_extra or {})}
         return subprocess.run(cmd, input=stdin, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env, timeout=timeout)
 
 
@@ -175,6 +176,9 @@ def static_checks() -> None:
         bad = [label for pat, label in FORBIDDEN if re.search(pat, scan, flags=re.I | re.M)]
         record(f"static: {f.name} is non-destructive and policy-clean", not bad, "; ".join(bad))
         record(f"static: {f.name} is plain ASCII", all(ord(c) < 128 for c in raw))
+        comment_quotes = [i + 1 for i, ln in enumerate(raw.splitlines()) if "--" in ln and "'" in ln.split("--", 1)[1] and ln.strip().startswith("--")]
+        record(f"static: {f.name} has no apostrophes in comment lines (statement splitters)", not comment_quotes, str(comment_quotes))
+        record(f"static: {f.name} ends by calling soc.lock_down_schema()", "SELECT soc.lock_down_schema();" in raw)
     hits = []
     for base in (ROOT / "database", ROOT / "supabase"):
         for p in base.rglob("*"):
@@ -189,10 +193,23 @@ def static_checks() -> None:
 
 
 # ------------------------------------------------------------------ cluster setup
-def apply_migrations(c: Cluster, db: str) -> bool:
+WORST_CASE_DEFAULTS = (
+    # Emulates a Supabase-like platform whose default privileges auto-grant every NEW object to the API roles.
+    # If the migrations rely on 'nothing is granted by default', this makes that assumption fail.
+    "ALTER DEFAULT PRIVILEGES FOR ROLE mig GRANT ALL ON TABLES TO anon, authenticated, service_role;"
+    "ALTER DEFAULT PRIVILEGES FOR ROLE mig GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;"
+    "ALTER DEFAULT PRIVILEGES FOR ROLE mig GRANT ALL ON FUNCTIONS TO anon, authenticated, service_role;"
+    "ALTER DEFAULT PRIVILEGES FOR ROLE mig GRANT USAGE ON SCHEMAS TO anon, authenticated, service_role;"
+)
+
+
+def apply_migrations(c: Cluster, db: str, worst_case: bool = True) -> bool:
     ok = True
+    if worst_case and c.supabase_stubs:
+        c.psql(db, WORST_CASE_DEFAULTS, user="mig")
     for f in sorted(MIGRATIONS.glob("*.sql")):
-        cp = c.psql(db, file=f, user="mig", single_tx=True, verbose=True)
+        # search_path is emptied for the migration session: any unqualified reference to a non-pg_catalog object must fail here
+        cp = c.psql(db, file=f, user="mig", single_tx=True, verbose=True, extra=["-c", "SET search_path = pg_catalog"] if False else None, env_extra={"PGOPTIONS": "-c search_path=pg_catalog"})
         if cp.returncode != 0:
             record(f"apply {f.name} to {db}", False, cp.stderr.strip().splitlines()[-1] if cp.stderr.strip() else "error")
             ok = False
@@ -203,9 +220,10 @@ def apply_migrations(c: Cluster, db: str) -> bool:
 
 
 def setup(c: Cluster, supabase_stubs: bool) -> None:
+    c.supabase_stubs = supabase_stubs
     sql = ""
     if supabase_stubs:   # roles every Supabase project already has
-        sql += "CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN; CREATE ROLE service_role NOLOGIN BYPASSRLS; "
+        sql += "CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN; CREATE ROLE service_role NOLOGIN BYPASSRLS; CREATE ROLE authenticator NOLOGIN; ALTER ROLE authenticator SET pgrst.db_schemas = 'public,graphql_public'; "
     sql += "CREATE ROLE mig LOGIN CREATEROLE;"   # stands in for Supabase's `postgres` migration role: NOT a superuser
     assert c.psql("postgres", sql).returncode == 0
     for db in ("soc_sql", "soc_conc", "soc_fresh"):
@@ -376,16 +394,56 @@ COMMIT;""", timeout=60)
 def optional_tests(c: Cluster) -> None:
     opt = ROOT / "database" / "optional"
     c.psql("postgres", "CREATE DATABASE soc_opt OWNER mig")
-    ok = True
-    for f in sorted(MIGRATIONS.glob("*.sql")) + sorted(opt.glob("*.sql")):
-        ok &= c.psql("soc_opt", file=f, user="mig", single_tx=True).returncode == 0
-    record("optional counterfactual migration applies on top of the core migrations", ok)
+    ok = apply_migrations(c, "soc_opt")
+    for f in sorted(opt.glob("*.sql")):
+        ok &= c.psql("soc_opt", file=f, user="mig", single_tx=True, env_extra={"PGOPTIONS": "-c search_path=pg_catalog"}).returncode == 0
+    record("optional counterfactual migration applies on top of the core migrations (worst-case defaults, empty search_path)", ok)
     if ok:
         c.psql("soc_opt", file=SQL_DIR / "00_helpers.sql")
         cp = c.psql("soc_opt", file=SQL_DIR / "09_optional_counterfactual.sql", verbose=False)
         passes = len(re.findall(r"NOTICE:\s+PASS:", cp.stderr))
         detail = f"{passes} assertions" if cp.returncode == 0 else ([ln for ln in cp.stderr.splitlines() if "TEST FAILED" in ln or "ERROR" in ln] or [cp.stderr[-300:]])[0][:400]
         record("sql tests: 09_optional_counterfactual.sql (original case preserved)", cp.returncode == 0 and passes > 0, detail)
+
+
+AUDIT = ROOT / "database" / "audit" / "post_deploy_audit.sql"
+
+
+def run_audit(c: Cluster, db: str, prefix: str = "", suffix: str = "") -> list[tuple[str, str, str]]:
+    sql = prefix + AUDIT.read_text(encoding="utf-8") + suffix
+    cp = c.psql(db, stdin=sql, extra=["-F", "~~"], verbose=False)
+    rows = [tuple(ln.split("~~", 2)) for ln in cp.stdout.splitlines() if ln.count("~~") >= 2]
+    return rows if cp.returncode == 0 else [("audit script error", "FAIL", cp.stderr[-300:])]
+
+
+def audit_tests(c: Cluster) -> None:
+    rows = run_audit(c, "soc_fresh")
+    fails = [r for r in rows if r[1] == "FAIL"]
+    record("post-deploy audit script (the file you will run on Supabase) reports no FAIL on a fresh deployment", len(rows) >= 14 and not fails, "; ".join(f"{a}: {c_}" for a, b, c_ in fails))
+    if not c.supabase_stubs:
+        return
+    # the audit must also DETECT problems, not just pass: inject each one in a rolled-back transaction
+    cases = [
+        ("anon granted SELECT on a table", "BEGIN; GRANT SELECT ON soc.datasets TO anon;", "ROLLBACK;", 5),
+        ("authenticated granted USAGE on the schema", "BEGIN; GRANT USAGE ON SCHEMA soc TO authenticated;", "ROLLBACK;", 5),
+        ("service_role granted EXECUTE on a function", "BEGIN; GRANT EXECUTE ON FUNCTION soc.sha256_hex(text) TO service_role;", "ROLLBACK;", 5),
+        ("PUBLIC granted a table privilege", "BEGIN; GRANT SELECT ON soc.source_events TO PUBLIC;", "ROLLBACK;", 5),
+        ("RLS disabled on a table", "BEGIN; ALTER TABLE soc.source_events NO FORCE ROW LEVEL SECURITY;", "ROLLBACK;", 4),
+        ("soc_api given BYPASSRLS", "BEGIN; ALTER ROLE soc_api BYPASSRLS;", "ROLLBACK;", 7),
+        ("soc_api granted UPDATE", "BEGIN; GRANT UPDATE ON soc.cases TO soc_api;", "ROLLBACK;", 9),
+        ("soc exposed through PostgREST", "BEGIN; ALTER ROLE authenticator SET pgrst.db_schemas = 'public,graphql_public,soc';", "ROLLBACK;", 6),
+    ]
+    detected = 0
+    for label, pre, post, n in cases:
+        rr = run_audit(c, "soc_fresh", pre + " ", " " + post)
+        ok = len(rr) >= 14 and not any(r[0] == "audit script error" for r in rr) and rr[n - 1][1] == "FAIL"   # the SPECIFIC check must fail
+        detected += ok
+        if not ok:
+            record(f"audit detects: {label}", False, str(rr[:3]))
+    record(f"post-deploy audit DETECTS all {len(cases)} injected problems (leaks, RLS off, BYPASSRLS, UPDATE grant, PostgREST exposure)", detected == len(cases), f"{detected}/{len(cases)}")
+    # and a clean Supabase-like PostgREST setting passes
+    ok_rows = run_audit(c, "soc_fresh", "BEGIN; ALTER ROLE authenticator SET pgrst.db_schemas = 'public,graphql_public'; ", " ROLLBACK;")
+    record("audit passes the normal Supabase PostgREST setting (public, graphql_public)", len(ok_rows) >= 14 and not any(r[1] == "FAIL" for r in ok_rows) and any(r[0].startswith("soc is not an exposed") and r[1] == "PASS" for r in ok_rows))
 
 
 # ------------------------------------------------------------------ main
@@ -411,6 +469,7 @@ def main() -> int:
                tables == "22" and val(c.psql("soc_fresh", "SELECT count(*) FROM pg_tables WHERE schemaname='public'")) == "0")
         run_sql_tests(c, not args.no_supabase_stubs)
         vector_checks(c)
+        audit_tests(c)
         concurrency_tests(c)
         optional_tests(c)
     finally:

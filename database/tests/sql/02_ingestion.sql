@@ -105,6 +105,21 @@ BEGIN
   PERFORM soc_test.check((SELECT canonical_json_sha256 <> raw_sha256 FROM soc.source_events WHERE dataset_id = dsA AND line_number = 22), 'legacy hash and original-record hash are distinct columns');
 END $$;
 
+-- ---------- bounds: generous enough for hostile/untrusted values to be STORED (the backend quarantines anything beyond them)
+DO $$
+DECLARE ds text := soc_test.mk_dataset('caps-bytes'); e text; raw text; sha text;
+BEGIN
+  raw := 'row-with-long-fields'; sha := soc.sha256_hex(raw);
+  INSERT INTO soc.source_events (dataset_id,event_id,timestamp,event_type,username,source_ip,host,resource,outcome,source_file,line_number,raw_text,raw_sha256)
+  VALUES (ds, soc.derive_event_id(ds,'auth_logs.csv',2,sha), now(), repeat('t',256), repeat('u',4096), repeat('i',4096), repeat('h',4096), repeat('r',8192), 'unknown', 'auth_logs.csv', 2, raw, sha);
+  PERFORM soc_test.check(true, 'a 4096-character username / ip / host and 8192-character resource are stored (hostile values do not break ingestion)');
+  raw := 'row-too-long'; sha := soc.sha256_hex(raw);
+  PERFORM soc_test.expect_error(format($f$INSERT INTO soc.source_events (dataset_id,event_id,timestamp,event_type,username,outcome,source_file,line_number,raw_text,raw_sha256)
+    VALUES (%L, %L, now(), 'x', %L, 'unknown', 'auth_logs.csv', 3, %L, %L)$f$, ds, soc.derive_event_id(ds,'auth_logs.csv',3,sha), repeat('u', 4097), raw, sha), '23514', 'beyond 4096 characters the database refuses (the backend must quarantine such rows)');
+  INSERT INTO soc.quarantined_records (dataset_id, row_number, reason) VALUES (ds, 9, repeat('echoed bad value ', 1000));
+  PERFORM soc_test.check(true, 'a long quarantine reason (error text echoing a bad value) is stored');
+END $$;
+
 -- ---------- quarantine
 DO $$
 DECLARE ds text := soc_test.mk_dataset('Q-bytes');

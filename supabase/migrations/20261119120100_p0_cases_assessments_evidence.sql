@@ -16,8 +16,8 @@ CREATE TABLE soc.cases (
   CONSTRAINT cases_anchor_fk FOREIGN KEY (dataset_id, anchor_event_id) REFERENCES soc.source_events (dataset_id, event_id) ON DELETE RESTRICT,
   CONSTRAINT cases_natural_key UNIQUE (dataset_id, correlation_key, anchor_event_id),
   CONSTRAINT cases_id_dataset UNIQUE (case_id, dataset_id),
-  CONSTRAINT cases_title CHECK (char_length(title) BETWEEN 1 AND 300),
-  CONSTRAINT cases_key CHECK (char_length(correlation_key) BETWEEN 1 AND 512),
+  CONSTRAINT cases_title CHECK (char_length(title) BETWEEN 1 AND 20000),
+  CONSTRAINT cases_key CHECK (char_length(correlation_key) BETWEEN 1 AND 4096),
   CONSTRAINT cases_budget CHECK (investigation_budget_total BETWEEN 0 AND 100)
 );
 COMMENT ON TABLE soc.cases IS 'Immutable case identity. case_id = derive_case_id(dataset_id, correlation_key, anchor_event_id); the anchor is the earliest event of the ORIGINAL cluster, so excluding evidence (counterfactual) can never change it. Verdict, status and budget live elsewhere.';
@@ -149,7 +149,7 @@ CREATE TABLE soc.findings (
   CONSTRAINT findings_stance CHECK (stance IN ('supporting', 'contradicting')),
   CONSTRAINT findings_weight_sign CHECK ((stance = 'supporting' AND weight >= 0) OR (stance = 'contradicting' AND weight <= 0)),
   CONSTRAINT findings_evidence CHECK (evidence IS NULL OR jsonb_typeof(evidence) = 'object'),
-  CONSTRAINT findings_text CHECK (char_length(title) BETWEEN 1 AND 300 AND char_length(rule_id) BETWEEN 1 AND 64)
+  CONSTRAINT findings_text CHECK (char_length(title) BETWEEN 1 AND 20000 AND char_length(rule_id) BETWEEN 1 AND 64)
 );
 COMMENT ON TABLE soc.findings IS 'Detection results per assessment. The same finding_id recurs across revisions (history). weight is the SIGNED contribution to the risk score.';
 CREATE INDEX findings_by_id ON soc.findings (finding_id);
@@ -238,7 +238,7 @@ CREATE TABLE soc.missing_evidence (
 );
 COMMENT ON TABLE soc.missing_evidence IS 'Expected telemetry that is absent. Absence is not evidence that activity was benign.';
 
--- ---------------------------------------------------------------- views (security_invoker: caller''s own privileges and RLS apply)
+-- ---------------------------------------------------------------- views (security_invoker: the callers own privileges and RLS apply)
 CREATE VIEW soc.case_event_view WITH (security_invoker = true) AS
 SELECT ce.case_id, ce.dataset_id, e.event_id, e.timestamp, e.event_type, e.username, e.source_ip, e.destination_ip, e.host, e.resource,
        e.outcome, e.source_file, e.line_number, e.raw_text, e.raw_sha256 AS raw_hash, a.revision AS added_in_revision
@@ -271,6 +271,6 @@ SELECT soc.secure_table('soc.attack_mapping_events');
 SELECT soc.secure_table('soc.missing_evidence');
 
 GRANT SELECT ON soc.case_event_view, soc.case_latest_assessment TO soc_api, soc_readonly;
-REVOKE ALL ON ALL FUNCTIONS IN SCHEMA soc FROM PUBLIC;
+SELECT soc.lock_down_schema();
 GRANT EXECUTE ON FUNCTION soc.assert_event_visible(text, text, text, uuid), soc.assign_revision_check(), soc.check_case_complete(),
   soc.finding_event_visible(), soc.check_finding_cites_events(), soc.attack_event_visible() TO soc_api;

@@ -65,7 +65,7 @@ LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE SET search_path = pg_catalog
 AS $$ SELECT p IS NULL OR (jsonb_typeof(p) = 'object' AND NOT EXISTS (SELECT 1 FROM jsonb_each(p) e WHERE jsonb_typeof(e.value) <> 'string')) $$;
 
 -- Applies the standard security posture to a table. Owner/migration use only.
---   * RLS enabled AND forced (so even the owner is subject to policy, unless it holds BYPASSRLS as Supabase's postgres does)
+--   * RLS enabled AND forced (so even the owner is subject to policy, unless it holds BYPASSRLS, as the Supabase postgres role normally does)
 --   * no access for PUBLIC / anon / authenticated / service_role
 --   * soc_api: SELECT + INSERT only; soc_readonly: SELECT only; NO UPDATE / DELETE / TRUNCATE for anyone
 --   * policies exist only for SELECT and INSERT (everything else is denied by default)
@@ -92,6 +92,29 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION soc.secure_table(regclass) FROM PUBLIC;
 REVOKE ALL ON FUNCTION soc.forbid_mutation() FROM PUBLIC;
+
+-- Final lock-down, run at the END of every migration. It does not rely on what the platform grants by default:
+-- it explicitly removes every privilege on the schema and on every table, view, sequence and function in it from
+-- PUBLIC and from the Supabase API roles (anon, authenticated, service_role). soc_api / soc_readonly keep only
+-- the grants that were given to them explicitly. Owner-only.
+CREATE FUNCTION soc.lock_down_schema() RETURNS void
+LANGUAGE plpgsql SET search_path = pg_catalog
+AS $$
+DECLARE r text;
+BEGIN
+  EXECUTE 'REVOKE ALL ON SCHEMA soc FROM PUBLIC';
+  EXECUTE 'REVOKE ALL ON ALL TABLES IN SCHEMA soc FROM PUBLIC';
+  EXECUTE 'REVOKE ALL ON ALL SEQUENCES IN SCHEMA soc FROM PUBLIC';
+  EXECUTE 'REVOKE ALL ON ALL FUNCTIONS IN SCHEMA soc FROM PUBLIC';
+  FOREACH r IN ARRAY ARRAY['anon', 'authenticated', 'service_role'] LOOP
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) THEN
+      EXECUTE format('REVOKE ALL ON SCHEMA soc FROM %I', r);
+      EXECUTE format('REVOKE ALL ON ALL TABLES IN SCHEMA soc FROM %I', r);
+      EXECUTE format('REVOKE ALL ON ALL SEQUENCES IN SCHEMA soc FROM %I', r);
+      EXECUTE format('REVOKE ALL ON ALL FUNCTIONS IN SCHEMA soc FROM %I', r);
+    END IF;
+  END LOOP;
+END $$;
 
 -- ---------------------------------------------------------------- datasets (content identity)
 CREATE TABLE soc.datasets (
@@ -149,7 +172,7 @@ CREATE TABLE soc.quarantined_records (
   raw_record  jsonb,
   PRIMARY KEY (dataset_id, row_number),
   CONSTRAINT quarantine_row CHECK (row_number >= 1),
-  CONSTRAINT quarantine_reason CHECK (char_length(reason) BETWEEN 1 AND 2000)
+  CONSTRAINT quarantine_reason CHECK (char_length(reason) BETWEEN 1 AND 20000)
 );
 COMMENT ON TABLE soc.quarantined_records IS 'Rows rejected at normalization (validation_errors[]). raw_record is never returned by the API.';
 
@@ -179,12 +202,12 @@ CREATE TABLE soc.source_events (
   CONSTRAINT events_outcome CHECK (outcome IN ('success', 'failure', 'unknown')),
   CONSTRAINT events_line CHECK (line_number >= 1),
   CONSTRAINT events_source_file CHECK (char_length(source_file) BETWEEN 1 AND 255 AND source_file !~ '[/\\]'),
-  CONSTRAINT events_type CHECK (char_length(event_type) BETWEEN 1 AND 100),
+  CONSTRAINT events_type CHECK (char_length(event_type) BETWEEN 1 AND 256),
   CONSTRAINT events_raw_nonempty CHECK (raw_text <> ''),
   CONSTRAINT events_raw_record_object CHECK (raw_record IS NULL OR jsonb_typeof(raw_record) = 'object'),
   CONSTRAINT events_field_lengths CHECK (
-    coalesce(char_length(username), 0) <= 512 AND coalesce(char_length(source_ip), 0) <= 128 AND coalesce(char_length(destination_ip), 0) <= 128
-    AND coalesce(char_length(host), 0) <= 512 AND coalesce(char_length(resource), 0) <= 4096)
+    coalesce(char_length(username), 0) <= 4096 AND coalesce(char_length(source_ip), 0) <= 4096 AND coalesce(char_length(destination_ip), 0) <= 4096
+    AND coalesce(char_length(host), 0) <= 4096 AND coalesce(char_length(resource), 0) <= 8192)
 );
 COMMENT ON TABLE soc.source_events IS 'Every valid normalized event with its verbatim original record. Append-only.';
 COMMENT ON COLUMN soc.source_events.raw_text IS 'Verbatim original record (CSV line / serialized JSON element). Never normalized. Untrusted.';
@@ -206,7 +229,8 @@ SELECT soc.secure_table('soc.dataset_uploads');
 SELECT soc.secure_table('soc.quarantined_records');
 SELECT soc.secure_table('soc.source_events');
 
-REVOKE ALL ON ALL FUNCTIONS IN SCHEMA soc FROM PUBLIC;
+SELECT soc.lock_down_schema();
+GRANT USAGE ON SCHEMA soc TO soc_api, soc_readonly;
 GRANT EXECUTE ON FUNCTION soc.sha256_hex(text), soc.derive_dataset_id(text), soc.derive_event_id(text, text, integer, text),
   soc.derive_case_id(text, text, text), soc.jsonb_all_strings(jsonb) TO soc_api, soc_readonly;
 -- trigger functions run as the invoking role and need EXECUTE for it

@@ -38,7 +38,7 @@ CREATE TABLE soc.counterfactual_excluded_events (
 );
 COMMENT ON TABLE soc.counterfactual_excluded_events IS 'Events a run hypothetically excluded. They must be real events of the case; nothing is removed from case_events.';
 
--- the run must compare against the case's CURRENT stored assessment
+-- the run must compare against the CURRENT stored assessment of the case
 CREATE FUNCTION soc.counterfactual_original_is_current() RETURNS trigger
 LANGUAGE plpgsql SET search_path = soc, pg_catalog
 AS $$
@@ -54,5 +54,5 @@ CREATE TRIGGER trg_cf_original_current BEFORE INSERT ON soc.counterfactual_runs 
 
 SELECT soc.secure_table('soc.counterfactual_runs');
 SELECT soc.secure_table('soc.counterfactual_excluded_events');
-REVOKE ALL ON ALL FUNCTIONS IN SCHEMA soc FROM PUBLIC;
+SELECT soc.lock_down_schema();
 GRANT EXECUTE ON FUNCTION soc.counterfactual_original_is_current() TO soc_api;

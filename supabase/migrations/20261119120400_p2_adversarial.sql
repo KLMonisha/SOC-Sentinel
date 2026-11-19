@@ -68,4 +68,4 @@ SELECT soc.secure_table('soc.adversarial_runs');
 SELECT soc.secure_table('soc.adversarial_pipeline_results');
 SELECT soc.secure_table('soc.adversarial_trials');
 GRANT SELECT ON soc.adversarial_run_summary TO soc_api, soc_readonly;
-REVOKE ALL ON ALL FUNCTIONS IN SCHEMA soc FROM PUBLIC;
+SELECT soc.lock_down_schema();

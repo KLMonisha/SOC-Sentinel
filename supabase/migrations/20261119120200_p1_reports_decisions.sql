@@ -37,7 +37,7 @@ CREATE TABLE soc.report_claims (
   verification_note  text,
   PRIMARY KEY (report_id, claim_id),
   CONSTRAINT claims_ordinal CHECK (ordinal >= 1),
-  CONSTRAINT claims_text CHECK (char_length(text) BETWEEN 1 AND 10000)
+  CONSTRAINT claims_text CHECK (char_length(text) BETWEEN 1 AND 20000)
 );
 CREATE UNIQUE INDEX claims_order ON soc.report_claims (report_id, ordinal);
 
@@ -56,12 +56,12 @@ CREATE TABLE soc.report_claim_citations (
   CONSTRAINT citations_report FOREIGN KEY (report_id, case_id) REFERENCES soc.reports (report_id, case_id) ON DELETE RESTRICT,
   CONSTRAINT citations_event FOREIGN KEY (case_id, resolved_dataset_id, cited_event_id) REFERENCES soc.case_events (case_id, dataset_id, event_id) MATCH SIMPLE ON DELETE RESTRICT,
   CONSTRAINT citations_ordinal CHECK (ordinal >= 1),
-  CONSTRAINT citations_event_text CHECK (char_length(cited_event_id) BETWEEN 1 AND 256)
+  CONSTRAINT citations_event_text CHECK (char_length(cited_event_id) BETWEEN 1 AND 4096)
 );
 COMMENT ON TABLE soc.report_claim_citations IS 'cited_event_id is stored verbatim even when it does not exist. resolved = true only when it matches an event of the report''s case (composite FK). Unresolved citations are kept and shown as unresolved; they can never support a verified claim.';
 CREATE INDEX citations_by_event ON soc.report_claim_citations (case_id, resolved_dataset_id, cited_event_id);
 
--- resolved citations must refer to evidence that already existed at the report's assessment revision
+-- resolved citations must refer to evidence that already existed at the assessment revision of the report
 CREATE FUNCTION soc.citation_checks() RETURNS trigger
 LANGUAGE plpgsql SET search_path = soc, pg_catalog
 AS $$
@@ -148,5 +148,5 @@ SELECT soc.secure_table('soc.report_claim_citations');
 SELECT soc.secure_table('soc.analyst_decisions');
 
 GRANT SELECT ON soc.report_citation_audit, soc.case_status TO soc_api, soc_readonly;
-REVOKE ALL ON ALL FUNCTIONS IN SCHEMA soc FROM PUBLIC;
+SELECT soc.lock_down_schema();
 GRANT EXECUTE ON FUNCTION soc.citation_checks(), soc.check_verified_claim() TO soc_api;
