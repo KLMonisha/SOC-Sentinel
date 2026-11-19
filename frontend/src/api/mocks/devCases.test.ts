@@ -39,6 +39,7 @@ describe("dev fixture cases are internally consistent", () => {
   test("the mock API serves them alongside the two original cases", async () => {
     const list = (await handleMock("GET", "/api/cases")).data as { cases: { case_id: string }[] };
     expect(list.cases.map((c) => c.case_id)).toEqual(expect.arrayContaining(["case_bf", "case_amb", "case_dev_3"]));
-    expect(list.cases).toHaveLength(10);
+    // 2 original + 8 dev + 4 investigation scenario cases (investigationScenarios.ts)
+    expect(list.cases).toHaveLength(14);
   });
 });

@@ -5,7 +5,8 @@
  * engine: counterfactual output here is a simplified stand-in for the backend rerun.
  */
 import { devCases, devReports } from "./devCases";
-import { adversarialExample, ambHiddenEvents, cases as seed, meta, reports as seedReports } from "./fixtures";
+import { adversarialExample, cases as seed, meta, reports as seedReports } from "./fixtures";
+import { applyScript, investigationCases, scripts, SLOW_MS } from "./investigationScenarios";
 import {
   ERROR_CODES,
   MAX_ADVERSARIAL_TRIALS,
@@ -35,9 +36,10 @@ const err = (status: number, code: string, message: string): MockResult => ({
 });
 
 // Session state: mutated only by investigate/decision. Counterfactuals never touch it.
-const state: Record<string, CaseDetail> = structuredClone({ ...seed, ...devCases });
+const state: Record<string, CaseDetail> = structuredClone({ ...seed, ...devCases, ...investigationCases });
+/** Cases whose budget another session spent after the page loaded (see investigationScenarios). */
+const spentElsewhere = new Set<string>(["case_inv_stale"]);
 const reports = { ...seedReports, ...devReports };
-const idempotent = new Map<string, InvestigateResponse>();
 
 const band = (v: number): RiskBand => (v >= 70 ? "high" : v >= 25 ? "investigate" : "low");
 const verdictFor = (b: RiskBand): Verdict =>
@@ -115,41 +117,54 @@ function counterfactual(c: CaseDetail, req: CounterfactualRequest): MockResult {
   return { status: 200, data };
 }
 
-function investigate(c: CaseDetail, req: InvestigateRequest): MockResult {
+interface Stored { sig: string; data: InvestigateResponse }
+const stored = new Map<string, Stored>();
+const failedOnce = new Set<string>();
+const sigOf = (tool: string, params?: Record<string, string>) => JSON.stringify([tool, Object.entries(params ?? {}).sort()]);
+
+function investigate(c: CaseDetail, req: InvestigateRequest): MockResult & { delayMs?: number } {
   if (!req?.idempotency_key) return err(400, "invalid_request", "idempotency_key is required.");
-  const cacheKey = `${c.summary.case_id}:${req.idempotency_key}`;
-  const prior = idempotent.get(cacheKey);
-  if (prior) return { status: 200, data: prior }; // retry: no extra budget
-  if (c.planner.budget_remaining <= 0) {
+  const caseId = c.summary.case_id;
+  const cacheKey = `${caseId}:${req.idempotency_key}`;
+  const sig = sigOf(req.tool, req.params);
+  const prior = stored.get(cacheKey);
+  if (prior) {
+    // Same key + same request: the stored response, no extra budget. A different request is refused.
+    if (prior.sig !== sig) return err(409, "IDEMPOTENCY_KEY_REUSED", "This idempotency key was already used for a different request.");
+    return { status: 200, data: prior.data };
+  }
+  const script = scripts[caseId]?.[req.tool];
+  if (script?.behaviour === "fail_once" && !failedOnce.has(cacheKey)) {
+    failedOnce.add(cacheKey); // the backend failed before charging anything
+    return err(503, "QUERY_FAILED", "The evidence store did not answer. Nothing was charged; retrying is safe.");
+  }
+  if (spentElsewhere.has(caseId) || c.planner.budget_remaining <= 0) {
     return err(409, ERROR_CODES.BUDGET_EXHAUSTED, "The investigation query budget is exhausted.");
   }
-  const candidate = c.planner.candidates.find((x) => x.tool === req.tool);
-  if (!candidate) return err(400, "invalid_request", `Tool ${req.tool} is not available for this case.`);
+  // `params` is optional in the contract: omitted means "the candidate's own". When given they must match exactly.
+  const candidate = c.planner.candidates.find((x) => x.tool === req.tool && (req.params === undefined || sigOf(x.tool, x.params) === sig));
+  if (!candidate) return err(400, "invalid_request", `Tool ${req.tool} with these parameters is not available for this case.`);
 
   const previous = { verdict: c.summary.verdict, risk_score: c.summary.risk_score, confidence: c.confidence };
-  const retrieved =
-    c.summary.case_id === "case_amb" && req.tool === "get_post_login_activity"
-      ? ambHiddenEvents.filter((e) => !c.events.some((x) => x.event_id === e.event_id))
-      : [];
-  c.events = [...c.events, ...retrieved];
-  c.timeline = c.events.map((e) => ({ event_id: e.event_id, timestamp: e.timestamp, label: e.event_type }));
+  const retrieved = (script?.events ?? []).filter((e) => !c.events.some((x) => x.event_id === e.event_id));
+  applyScript(c, script ?? { events: [] });
   c.planner = {
     ...c.planner,
     budget_remaining: c.planner.budget_remaining - 1,
-    candidates: c.planner.candidates.map((x) => (x.tool === req.tool ? { ...x, used: true, recommended: false } : x)),
+    candidates: c.planner.candidates.map((x) => (x === candidate ? { ...x, used: true, recommended: false } : x)),
   };
   const data: InvestigateResponse = {
     ...meta("inv"),
-    case_id: c.summary.case_id,
+    case_id: caseId,
     tool: req.tool,
     reason: candidate.reason,
-    retrieved_events: retrieved,
+    retrieved_events: structuredClone(retrieved),
     budget_remaining: c.planner.budget_remaining,
     updated_case: structuredClone(c),
     previous,
   };
-  idempotent.set(cacheKey, data);
-  return { status: 200, data };
+  stored.set(cacheKey, { sig, data });
+  return { status: 200, data, ...(script?.behaviour === "slow_first" ? { delayMs: SLOW_MS } : {}) };
 }
 
 const decisions: Record<string, DecisionResponse["record"][]> = {};
@@ -195,7 +210,11 @@ export async function handleMock(method: string, path: string, body?: unknown, f
   if (method === "GET" && !sub) return { status: 200, data: { ...structuredClone(c), decisions: decisions[id] ?? [] } };
   if (method === "GET" && sub === "report") return { status: 200, data: reports[id] };
   if (method === "POST" && sub === "counterfactual") return counterfactual(c, body as CounterfactualRequest);
-  if (method === "POST" && sub === "investigate") return investigate(c, body as InvestigateRequest);
+  if (method === "POST" && sub === "investigate") {
+    const r = investigate(c, body as InvestigateRequest);
+    if (r.delayMs) await new Promise((res) => setTimeout(res, r.delayMs));
+    return { status: r.status, data: r.data };
+  }
   if (method === "POST" && sub === "decision") {
     const req = body as DecisionRequest;
     if (!req?.analyst_id?.trim()) return err(400, "invalid_request", "analyst_id is required.");
@@ -214,4 +233,13 @@ export async function handleMock(method: string, path: string, body?: unknown, f
     return { status: 200, data };
   }
   return err(404, "not_found", `No mock for ${method} ${path}`);
+}
+
+/** Test hook: restore the pristine fixture session (cases, idempotency store, decisions). Mock-only. */
+export function resetMockSession(): void {
+  for (const k of Object.keys(state)) delete state[k];
+  Object.assign(state, structuredClone({ ...seed, ...devCases, ...investigationCases }));
+  stored.clear();
+  failedOnce.clear();
+  for (const k of Object.keys(decisions)) delete decisions[k];
 }

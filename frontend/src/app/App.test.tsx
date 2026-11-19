@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { App } from "./App";
 
@@ -27,4 +27,11 @@ test("/ opens the landing page (lazy-loaded), not the application shell", async 
   expect(await screen.findByRole("heading", { name: /SOC Sentinel\. What would change my mind/i }, { timeout: 5000 })).toBeInTheDocument();
   expect(screen.queryByRole("navigation", { name: "Primary" })).not.toBeInTheDocument();
   for (const l of screen.getAllByRole("link", { name: /Enter SOC Sentinel/i, hidden: true })) expect(l).toHaveAttribute("href", "/app");
+});
+
+test("the Investigation Lab lives at /app/investigation and the old /app/investigate links still land there", async () => {
+  at("/investigate");
+  expect(await screen.findByRole("heading", { name: /What evidence is missing\?/i })).toBeInTheDocument();
+  const nav = screen.getByRole("navigation", { name: "Primary" });
+  expect(within(nav).getByRole("link", { name: /Investigation Lab/i })).toHaveAttribute("href", "/app/investigation");
 });

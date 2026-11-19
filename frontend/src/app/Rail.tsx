@@ -6,7 +6,7 @@ const NAV = [
   { to: "/app", label: "Command Center", Icon: Radar, end: true },
   { to: "/app/evidence", label: "Evidence Room", Icon: FolderSearch, end: false },
   { to: "/app/counterfactual", label: "Counterfactual Lab", Icon: GitCompareArrows, end: false },
-  { to: "/app/investigate", label: "Investigation Lab", Icon: Crosshair, end: false },
+  { to: "/app/investigation", label: "Investigation Lab", Icon: Crosshair, end: false },
   { to: "/app/red-team", label: "Red Team Lab", Icon: ShieldAlert, end: false },
 ] as const;
 

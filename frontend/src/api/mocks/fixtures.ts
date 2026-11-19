@@ -19,7 +19,7 @@ export const meta = (id: string): Versioned => ({ schema_version: SCHEMA_VERSION
 const FILE = "auth_logs.csv";
 const IP = "203.0.113.45";
 
-function ev(n: number, minute: number, type: string, outcome: SourceEvent["outcome"], extra: Partial<SourceEvent> = {}): SourceEvent {
+export function ev(n: number, minute: number, type: string, outcome: SourceEvent["outcome"], extra: Partial<SourceEvent> = {}): SourceEvent {
   const ts = `2026-11-18T10:${String(minute).padStart(2, "0")}:00Z`;
   const user = extra.username === undefined ? "alice" : extra.username;
   return {

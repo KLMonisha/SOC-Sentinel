@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
 import type { Finding } from "@/api/types";
 import { EvidenceBadge } from "@/components/ui/EvidenceBadge";
 import { SeverityBadge, VerdictLabel } from "@/components/ui/Badges";
@@ -83,6 +84,7 @@ export function AnalysisPanel() {
 
       <Section title="Missing telemetry" count={c.missing_evidence.length}>
         <p className="mb-2 text-[11px] text-suspicious">Missing is not benign: these are unknowns that limit the conclusion.</p>
+        <p className="mb-2 text-[12px]"><Link to={`/app/investigation/${encodeURIComponent(c.summary.case_id)}`} className="text-verified underline-offset-2 hover:underline">What evidence is missing? Investigate →</Link></p>
         {c.missing_evidence.length === 0 ? <p className="text-[12px] text-ink-muted">None reported.</p> : (
           <ul className="space-y-2">
             {c.missing_evidence.map((m) => (

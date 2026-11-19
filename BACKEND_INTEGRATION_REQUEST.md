@@ -319,6 +319,7 @@ Request: `{ "tool": "get_post_login_activity", "params": { "username": "bob" }, 
 - **Budget**: initial 3 per case; each *executed* query costs 1; exhausted ⇒ 409 `INVESTIGATION_BUDGET_EXHAUSTED`.
 - **Idempotency**: same `idempotency_key` + same request ⇒ **return the stored response, charge no budget**. Same key + different tool/params ⇒ 409 `IDEMPOTENCY_KEY_REUSED`. Scope keys per case. Persist them (`investigation_requests`).
 - A query with no results is a valid 200 with `retrieved_events: []` (it still consumes budget).
+- **Added for the Investigation Lab (Milestone D):** `params` is optional on the request (omitted means the candidate own params; when sent they must match). Please also define a transient-failure response (5xx, with a stable code) and state that it charges no budget, so the UI can safely retry with the same key; `404 CASE_NOT_FOUND`; `400 UNSUPPORTED_TOOL`. See `INTEGRATION_STATUS.md` §7 for the full dependency list.
 
 Response:
 ```json

@@ -6,6 +6,8 @@ import { CommandCenter } from "@/pages/CommandCenter";
 import { EvidenceRoom, EvidenceRoomIndex } from "@/pages/EvidenceRoom";
 import { CounterfactualIndex } from "@/pages/CounterfactualIndex";
 import { CounterfactualLab } from "@/pages/CounterfactualLab";
+import { InvestigationIndex } from "@/pages/InvestigationIndex";
+import { InvestigationLab } from "@/pages/InvestigationLab";
 import { Placeholder } from "@/pages/Placeholder";
 import { ReportPage } from "@/pages/ReportPage";
 
@@ -13,6 +15,11 @@ import { ReportPage } from "@/pages/ReportPage";
 function LegacyEvidenceRedirect() {
   const { caseId = "" } = useParams();
   return <Navigate to={`/app/evidence/${encodeURIComponent(caseId)}`} replace />;
+}
+
+function LegacyInvestigationRedirect() {
+  const { caseId = "" } = useParams();
+  return <Navigate to={`/app/investigation/${encodeURIComponent(caseId)}`} replace />;
 }
 
 export function App() {
@@ -29,13 +36,16 @@ export function App() {
           <Route path="evidence/:caseId/report" element={<ReportPage />} />
           <Route path="counterfactual" element={<CounterfactualIndex />} />
           <Route path="counterfactual/:caseId" element={<CounterfactualLab />} />
-          <Route path="investigate" element={<Placeholder title="Investigation Lab" phase="Phase 8" />} />
+          <Route path="investigation" element={<InvestigationIndex />} />
+          <Route path="investigation/:caseId" element={<InvestigationLab />} />
+          <Route path="investigate" element={<Navigate to="/app/investigation" replace />} />
+          <Route path="investigate/:caseId" element={<LegacyInvestigationRedirect />} />
           <Route path="red-team" element={<Placeholder title="Red Team Lab" phase="Phase 9" />} />
         </Route>
         <Route path="evidence" element={<Navigate to="/app/evidence" replace />} />
         <Route path="evidence/:caseId" element={<LegacyEvidenceRedirect />} />
         <Route path="counterfactual" element={<Navigate to="/app/counterfactual" replace />} />
-        <Route path="investigate" element={<Navigate to="/app/investigate" replace />} />
+        <Route path="investigate" element={<Navigate to="/app/investigation" replace />} />
         <Route path="red-team" element={<Navigate to="/app/red-team" replace />} />
       </Routes>
     </TransitionProvider>

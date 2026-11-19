@@ -287,6 +287,9 @@ export function ReportPage() {
             <Surface level="plane" className="px-6 py-6 sm:px-8">
               <DecisionPanel caseDetail={c} onDecided={refreshCase} />
             </Surface>
+            <Link to={`/app/investigation/${encodeURIComponent(s.case_id)}`} className="mt-8 mr-8 inline-flex items-center gap-2 text-[12px] uppercase tracking-[0.16em] text-ink-muted hover:text-ink">
+              Investigate missing evidence <ArrowUpRight size={13} aria-hidden />
+            </Link>
             <Link to={evidencePath(s.case_id)} className="mt-8 inline-flex items-center gap-2 text-[12px] uppercase tracking-[0.16em] text-verified hover:underline">
               Back to the Evidence Room <ArrowUpRight size={13} aria-hidden />
             </Link>

@@ -77,3 +77,14 @@ The Evidence Room derives its graph in a replaceable adapter (`frontend/src/feat
 - An unchanged verdict (and even an unchanged score) is a normal 200 result.
 - Error codes handled by name: `UNSUPPORTED_OVERRIDE`, `EVENT_NOT_FOUND` (upper-snake, as proposed in `BACKEND_INTEGRATION_REQUEST.md`).
 - The dev mock's recomputation is a labelled stand-in (a finding with 0–1 supporting events left is removed; 2+ keeps a proportionally smaller weight). It is **not** a model of the backend's rules.
+
+## Phase 8 frontend assumptions (Investigation Lab) ⚠ provisional
+
+- Routes: `/app/investigation` (case picker) and `/app/investigation/:caseId`; `/app/investigate[/:caseId]` redirect there.
+- Candidates are shown exactly as `planner.candidates[]` provides them. A candidate is a **proposal** (status Proposed); evidence exists only after a successful `POST …/investigate`. `params` are sent verbatim (omitted when empty); the UI never edits or adds parameters. A candidate whose `tool` is not one of the three agreed tools is shown as unsupported and never sent.
+- The initial budget is `planner.budget_total` / `budget_remaining` as returned (3 in the mock). After a response the UI uses the response's `budget_remaining`; it is never decremented locally. `INVESTIGATION_BUDGET_EXHAUSTED` locks the console for that case.
+- Each user-initiated action gets a fresh `crypto.randomUUID()` key, retained across retries of that action (timeout, network error, 5xx) and discarded after success or a non-retryable error. A synchronous guard prevents duplicate submission while a request is in flight. The request times out client-side after 15 s.
+- The before/after view uses `previous` (before) and `updated_case` (after). If `updated_case` is missing the UI states "No updated assessment was returned". Findings are diffed by `finding_id`. An unchanged verdict is presented as a valid outcome.
+- Raw log text is rendered as inert text. Provenance is checked for presence and shape only (SHA-256 is a 64-hex check; the UI does not recompute the hash). Evidence Room links use `/app/evidence/{case}?event={event_id}` and are offered only if the event is in `updated_case.events`.
+- Query history is **not** in the contract: only queries run in the current browser session are listed (in-memory; lost on reload). The candidate `used` flag is the only persisted trace.
+- Wording for each tool's "investigation question" is UI-owned; the contract has no such field.

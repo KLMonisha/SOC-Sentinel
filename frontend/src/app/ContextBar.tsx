@@ -7,7 +7,7 @@ const SECTIONS: Record<string, string> = {
   "": "Command Center",
   evidence: "Evidence Room",
   counterfactual: "Counterfactual Lab",
-  investigate: "Investigation Lab",
+  investigation: "Investigation Lab",
   "red-team": "Red Team Lab",
 };
 

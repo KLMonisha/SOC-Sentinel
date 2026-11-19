@@ -52,17 +52,17 @@ Real `/api/analyze` and `/api/counterfactual` responses from the demo CSV (8 row
 | Report page + citation navigation | ✅ 🧪 | Milestone B. Browser-verified against the mock only. |
 | Analyst decision + audit history | ✅ 🧪 | Milestone B. Report page + Evidence Room "Decision" tab. Mock only (the mock keeps decisions in page memory, so a full reload resets them). |
 | Counterfactual Lab | ✅ 🧪 | Milestone C. Branch composition, validation, changed/unchanged verdicts, failures, integrity re-check. **Mock only.** No adapter to the real stateless `/api/counterfactual` by decision: waits for stable cases and events. |
-| Investigation Lab (planner) | ❌ | `Placeholder`. Client + mock exist. |
+| Investigation Lab | ✅ 🧪 | Milestone D. Case picker, evidence planner, three-segment budget, execution stage, provenance ledger, before/after assessment, idempotent retries, all failure states. **Mock only** (scripted fixtures, labelled). |
 | Red Team Lab | ❌ | `Placeholder`. Client + mock exist. |
 | End-to-end journeys A–E | ❌ | Journey A partial (upload → queue → evidence), mock only. |
 | Real-backend integration | ❌ | See §1. Blocked on Member 1 (events, envelope, cases, persistence). |
 | Demo datasets and walkthrough | ❌ | Demo CSV drafted (see below). |
 | Accessibility | 🟡 | Semantics and reduced motion present; no systematic audit. |
 | Performance | 🟡 | Bundle sizes known (Landing ≈ 940 kB lazy, app ≈ 810 kB); no profiling. |
-| Tests | ✅ | 125 passing at start of this phase. |
+| Tests | ✅ | 253 passing after Milestone D (60 added: model, mock scenarios, mock/live isolation, Investigation Lab UI). |
 
 ## 3. Completion estimate (Member 2 scope, honest)
-- **Overall: ≈ 60% after Milestone C (frontend complete for Counterfactual, mock-tested only).** Foundation, landing, shell, Command Center and the Evidence Room core exist; four product screens, the decision/report flows, journeys and demo are not built.
+- **Overall: ≈ 70% after Milestone D (frontend complete for Counterfactual and Investigation, mock-tested only).** Remaining: Red Team Lab, exports and refinement, end-to-end journeys, demo and accessibility audit.
 - **Real-backend integration: 0%.** No agreed endpoint has been exercised successfully against the real backend. This number only moves when one has.
 
 ## 4. Working agreement for this phase
@@ -93,3 +93,22 @@ Cross-cutting requirements for every export:
 - State the data source explicitly: **mock exports are watermarked "DEVELOPMENT FIXTURE" and carry `data_source: "mock"` in the manifest**; live exports carry `data_source: "live"`.
 - Treat all log-derived text as untrusted (escaping, safe filenames, no formula/markup injection).
 - Never present a recomputed counterfactual as the stored case outcome.
+
+## 7. Milestone D: backend functionality the Investigation Lab needs (not integrated)
+
+The Investigation Lab (`/app/investigation[/:caseId]`) runs **only against the development mock**. Nothing below exists in the real backend today, and no adapter to `/api/analyze` or `/api/counterfactual` was written. Detail and acceptance criteria are in `BACKEND_INTEGRATION_REQUEST.md` §5.1; this list is what the screen specifically depends on.
+
+| # | Needed from the backend | Why the UI needs it |
+|---|---|---|
+| 1 | `GET /api/cases/{id}` returning `planner {budget_total, budget_remaining, candidates[]}` with `tool`, `params`, `reason`, `used`, `recommended`, and (if real) `relevance`, `expected_uncertainty_reduction`, `retrieval_cost` | Planner modules and the budget meter. The UI shows exactly these fields and computes no scores. |
+| 2 | `POST /api/cases/{id}/investigate` with `{tool, params?, idempotency_key}` | The only way to retrieve evidence. `params`, when sent, are the candidate's own, unmodified. |
+| 3 | Response `retrieved_events[]` as full `SourceEvent` (`event_id`, `timestamp`, `source_file`, `line_number`, `raw_text`, `raw_hash`, entities) | Provenance ledger. Missing fields are displayed as missing, never filled. |
+| 4 | Response `updated_case` (full `CaseDetail`, events folded in, verdict/risk/confidence/coverage/findings recomputed) and `previous {verdict, risk_score, confidence}` | Before/after comparison. If `updated_case` is absent the UI says so and shows no new assessment. |
+| 5 | Response `budget_remaining`, authoritative and persisted per case | The UI never decrements the budget itself. |
+| 6 | Idempotency: same key + same request returns the stored response and charges nothing; same key + different tool/params returns 409 `IDEMPOTENCY_KEY_REUSED`; keys scoped per case and persisted | Safe retry after a timeout or a transient failure. |
+| 7 | 409 `INVESTIGATION_BUDGET_EXHAUSTED` when the budget is 0 | Locks the console. |
+| 8 | Error codes with the envelope: `CASE_NOT_FOUND` (404), `UNSUPPORTED_TOOL` or `invalid_request` (400), a transient-failure code with 5xx (the mock uses `QUERY_FAILED` 503). **Please state whether a 5xx guarantees nothing was charged.** | The UI retries 5xx, timeouts and network errors with the same key, and does not retry 4xx. |
+| 9 | Whether `retrieved_events[]` may contain events already in the case (the UI labels these "Already in case") and the allowed `params` keys per tool | Display and request validation. |
+| 10 | Server-side request timeout expectation | The console gives up after 15 s and retries with the same key. |
+
+Mock-only in Milestone D: all candidate sets, retrieved events, assessment changes, the scripted failure/slow/exhausted cases (`case_inv_*`), and the placeholder hashes. The UI-owned "investigation question" wording per tool is a label, not backend data.

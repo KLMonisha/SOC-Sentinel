@@ -84,7 +84,14 @@ async function request<T>(method: Method, path: string, opts: RequestOptions = {
   if (config.useMocks) {
     // Explicit opt-in only. Real-API failures below never reach this branch.
     const { handleMock } = await import("./mocks/handler");
-    const { status, data } = await handleMock(method, path, opts.body, opts.form);
+    // The mock honours AbortSignal like fetch does, so timeouts and navigation cancel it the same way.
+    const abort = (): DOMException => new DOMException("Aborted", "AbortError");
+    if (opts.signal?.aborted) throw abort();
+    const { status, data } = await new Promise<Awaited<ReturnType<typeof handleMock>>>((resolve, reject) => {
+      const onAbort = () => reject(abort());
+      opts.signal?.addEventListener("abort", onAbort, { once: true });
+      handleMock(method, path, opts.body, opts.form).then(resolve, reject).finally(() => opts.signal?.removeEventListener("abort", onAbort));
+    });
     return parseResponse<T>(status, data);
   }
 
