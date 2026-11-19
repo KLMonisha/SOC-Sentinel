@@ -1,0 +1,95 @@
+{
+  "_comment": "Reference vectors for the deterministic identifiers. Separator between parts is the ASCII unit separator U+001F. All inputs are UTF-8. Generated with Python hashlib; verified against PostgreSQL by database/tests/run_tests.py.",
+  "separator": "U+001F",
+  "sha256_hex": [
+    {
+      "input": "",
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "input": "abc",
+      "expected": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+    },
+    {
+      "input": "2026-11-18T10:00:00Z,alice,203.0.113.45,failed_login,server-01",
+      "expected": "d3b3d59c6f5e67e70294c6267f21868dd44f4a3e698511d1dfe66fe9fe5e8e4a"
+    },
+    {
+      "input": "{\"time\":\"2026-11-18T10:03:00Z\",\"user\":\"alice\",\"path\":\"/admin\",\"status\":403}",
+      "expected": "dfbf98e9a8b846adf452a1a9f55476c75a9874ef0081a1dfee945080e6067942"
+    },
+    {
+      "input": "naïve — 用户 🔒 line\nbreak",
+      "expected": "a430ba5ace1d7194b14deb274764924bd3108014542c64502078e48653c5819b"
+    }
+  ],
+  "dataset_id": [
+    {
+      "file_sha256": "190b1f43517483890d5669fc341ca141f0ce6698b3b1a3ef446b5cb84d4aed3d",
+      "expected": "ds_190b1f4351748389"
+    },
+    {
+      "file_sha256": "afb3d63370e430e3829f53818f75fbd42ce1a41d21248a191ae6b28eb2f72b9e",
+      "expected": "ds_afb3d63370e430e3"
+    },
+    {
+      "file_sha256": "a280c1af76ddc535a517275b4458ef8d336be9ba91824d26ae6b0dea5b5e7181",
+      "expected": "ds_a280c1af76ddc535"
+    }
+  ],
+  "event_id": [
+    {
+      "args": {
+        "dataset_id": "ds_190b1f4351748389",
+        "source_file": "auth_logs.csv",
+        "line_number": 2,
+        "raw_sha256": "d3b3d59c6f5e67e70294c6267f21868dd44f4a3e698511d1dfe66fe9fe5e8e4a"
+      },
+      "expected": "evt_1f20da98c07bd9fb"
+    },
+    {
+      "args": {
+        "dataset_id": "ds_afb3d63370e430e3",
+        "source_file": "web_logs.json",
+        "line_number": 1,
+        "raw_sha256": "dfbf98e9a8b846adf452a1a9f55476c75a9874ef0081a1dfee945080e6067942"
+      },
+      "expected": "evt_174611c54b7a787d"
+    },
+    {
+      "args": {
+        "dataset_id": "ds_a280c1af76ddc535",
+        "source_file": "日志 (final).csv",
+        "line_number": 123456,
+        "raw_sha256": "a430ba5ace1d7194b14deb274764924bd3108014542c64502078e48653c5819b"
+      },
+      "expected": "evt_645b2117dd19fded"
+    }
+  ],
+  "case_id": [
+    {
+      "args": {
+        "dataset_id": "ds_190b1f4351748389",
+        "correlation_key": "203.0.113.45",
+        "anchor_event_id": "evt_ca978112ca1bbdca"
+      },
+      "expected": "case_0940ace505ce86fd"
+    },
+    {
+      "args": {
+        "dataset_id": "ds_190b1f4351748389",
+        "correlation_key": "203.0.113.45",
+        "anchor_event_id": "evt_3e23e8160039594a"
+      },
+      "expected": "case_9d54f17974f2a253"
+    },
+    {
+      "args": {
+        "dataset_id": "ds_afb3d63370e430e3",
+        "correlation_key": "用户@例子.cn",
+        "anchor_event_id": "evt_2e7d2c03a9507ae2"
+      },
+      "expected": "case_4d859ba4e780ac96"
+    }
+  ]
+}

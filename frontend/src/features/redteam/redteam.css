@@ -1,0 +1,30 @@
+/* Red Team Lab motion and materials. One-shot reveals plus a single indeterminate sweep while a run is in
+   flight. The global prefers-reduced-motion rule collapses durations; looping effects are removed below. */
+
+.rt-module { position: relative; transition: box-shadow 0.45s var(--ease-out), transform 0.45s var(--ease-out); cursor: pointer; }
+.rt-module:hover { transform: translateY(-2px); }
+.rt-module:has(:checked) { box-shadow: inset 0 0 0 1px rgba(99, 235, 216, 0.6), 0 26px 52px -30px rgba(99, 235, 216, 0.32); }
+.rt-module:has(:focus-visible) { outline: 2px solid var(--color-focus); outline-offset: 3px; }
+
+/* The trust boundary: trusted bands above, attacker-controlled bands below, never mixed. */
+.rt-trusted { border-left: 2px solid var(--color-verified); background: rgba(99, 235, 216, 0.05); }
+.rt-hostile { border-left: 2px dashed var(--color-suspicious); background: repeating-linear-gradient(135deg, rgba(232, 161, 93, 0.07) 0 6px, transparent 6px 12px); }
+.rt-boundary { height: 0; border-top: 1px dashed var(--color-line-strong); position: relative; margin: 10px 0; }
+.rt-boundary::after { content: "TRUST BOUNDARY"; position: absolute; right: 0; top: -7px; padding-left: 8px; background: var(--color-surface); font: 9.5px var(--font-mono); letter-spacing: 0.18em; color: var(--color-ink-faint); }
+
+/* Chamber */
+.rt-lane { position: relative; overflow: hidden; }
+.rt-lane[data-running="true"]::after { content: ""; position: absolute; inset: 0 auto 0 0; width: 40%; background: linear-gradient(90deg, transparent, rgba(99, 235, 216, 0.14), transparent); animation: rt-sweep 2.2s var(--ease-out) infinite; pointer-events: none; }
+@keyframes rt-sweep { from { transform: translateX(-110%); } to { transform: translateX(290%); } }
+.rt-pip { display: inline-flex; width: 26px; height: 26px; align-items: center; justify-content: center; font: 11px var(--font-mono); transition: transform 0.4s var(--ease-out); animation: rt-pop 0.55s var(--ease-out) backwards; animation-delay: calc(var(--i, 0) * 45ms); }
+@keyframes rt-pop { from { opacity: 0; transform: scale(0.5); } }
+.rt-pip[data-outcome="injection_succeeded"] { background: var(--color-critical); color: #0a1613; }
+.rt-pip[data-outcome="injection_resisted"] { border: 1px solid var(--color-verified); color: var(--color-verified); }
+.rt-pip[data-outcome="not_returned"] { border: 1px dashed var(--color-missing); color: var(--color-missing); }
+.rt-rise { animation: rt-rise 0.7s var(--ease-out) backwards; animation-delay: calc(var(--i, 0) * 90ms); }
+@keyframes rt-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .rt-lane[data-running="true"]::after { display: none; }
+  .rt-module:hover { transform: none; }
+}

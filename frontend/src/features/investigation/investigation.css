@@ -1,0 +1,51 @@
+/* Investigation Lab motion. Restrained: one-shot reveals and a single scan line while a query runs.
+   The global prefers-reduced-motion rule (index.css) collapses every duration here. */
+
+/* Stage rail: PROPOSED → EXECUTING → RETRIEVED → ASSESSED */
+.inv-track { position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.inv-track::before, .inv-track::after { content: ""; position: absolute; left: 12.5%; right: 12.5%; top: 11px; height: 1px; }
+.inv-track::before { background: var(--color-line-strong); }
+.inv-track::after { background: var(--color-verified); transform-origin: left; transform: scaleX(var(--fill, 0)); transition: transform 0.8s var(--ease-out); }
+.inv-node { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+.inv-dot { width: 23px; height: 23px; border: 1px solid var(--color-line-strong); background: var(--color-bg); transform: rotate(45deg) scale(0.62); transition: all 0.5s var(--ease-out); }
+.inv-node[data-state="done"] .inv-dot { background: var(--color-verified); border-color: var(--color-verified); transform: rotate(45deg) scale(0.62); }
+.inv-node[data-state="active"] .inv-dot { border-color: var(--color-verified); box-shadow: 0 0 0 5px rgba(99, 235, 216, 0.12), 0 0 22px rgba(99, 235, 216, 0.35); transform: rotate(45deg) scale(0.8); }
+.inv-node[data-state="failed"] .inv-dot { border-color: var(--color-critical); box-shadow: 0 0 0 5px rgba(214, 89, 95, 0.12); transform: rotate(45deg) scale(0.8); }
+.inv-node[data-state="active"] .inv-dot { animation: inv-breathe 2.4s ease-in-out infinite; }
+@keyframes inv-breathe { 50% { box-shadow: 0 0 0 9px rgba(99, 235, 216, 0.05), 0 0 30px rgba(99, 235, 216, 0.5); } }
+
+/* Execution stage scan line (only while executing) */
+.inv-scan { position: relative; overflow: hidden; }
+.inv-scan::after { content: ""; position: absolute; inset: 0 auto 0 0; width: 34%; background: linear-gradient(90deg, transparent, rgba(99, 235, 216, 0.16), transparent); animation: inv-sweep 1.8s var(--ease-out) infinite; pointer-events: none; }
+@keyframes inv-sweep { from { transform: translateX(-110%); } to { transform: translateX(310%); } }
+
+/* Budget segments */
+.inv-seg { position: relative; height: 18px; border: 1px solid var(--color-line-strong); background: transparent; overflow: hidden; transition: border-color 0.5s var(--ease-out); }
+.inv-seg::before { content: ""; position: absolute; inset: 0; background: var(--color-verified); transform-origin: left; transform: scaleX(0); transition: transform 0.7s var(--ease-out); opacity: 0.9; }
+.inv-seg[data-state="available"] { border-color: var(--color-verified); }
+.inv-seg[data-state="used"]::before { transform: scaleX(1); background: var(--color-line-strong); opacity: 1; }
+.inv-seg[data-state="used"] { border-color: var(--color-ink-faint); }
+.inv-seg[data-state="executing"] { border-color: var(--color-verified); }
+.inv-seg[data-state="executing"]::before { transform: scaleX(1); animation: inv-pulse 1.2s ease-in-out infinite; }
+.inv-seg[data-state="exhausted"] { border-color: var(--color-critical); border-style: dashed; }
+@keyframes inv-pulse { 50% { opacity: 0.25; } }
+
+/* Ledger / reveal */
+.inv-rise { animation: inv-rise 0.7s var(--ease-out) backwards; animation-delay: calc(var(--i, 0) * 90ms); }
+@keyframes inv-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+/* Candidate modules */
+.inv-module { position: relative; transition: transform 0.45s var(--ease-out), box-shadow 0.45s var(--ease-out); }
+.inv-module[data-selected="true"] { box-shadow: inset 0 0 0 1px rgba(99, 235, 216, 0.55), 0 24px 50px -28px rgba(99, 235, 216, 0.3); }
+.inv-module::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--color-line-strong); transition: background 0.4s; }
+.inv-module[data-selected="true"]::before, .inv-module[data-rec="true"]::before { background: var(--color-verified); }
+.inv-module[data-locked="true"] { opacity: 0.55; }
+.inv-bar { height: 3px; background: var(--color-line); }
+.inv-bar > i { display: block; height: 100%; background: var(--color-verified); transform-origin: left; animation: inv-grow 0.9s var(--ease-out) backwards; }
+@keyframes inv-grow { from { transform: scaleX(0); } }
+
+/* Looping effects are switched off outright (a 0.01ms infinite animation would flicker). */
+@media (prefers-reduced-motion: reduce) {
+  .inv-scan::after { display: none; }
+  .inv-node[data-state="active"] .inv-dot, .inv-seg[data-state="executing"]::before { animation: none !important; }
+}
